@@ -1,0 +1,51 @@
+# Runtime
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+remotion/node_modules/
+remotion/out/
+out/
+
+# Vídeo de origem estagiado para o Remotion (nunca commitar)
+remotion/public/*
+!remotion/public/.gitkeep
+
+# Jobs e artefatos gerados
+workspace/jobs/*/
+!workspace/jobs/.gitkeep
+
+# Assets (áudio/vídeo pesados não vão pro git)
+assets/sound_effects/*
+!assets/sound_effects/.gitkeep
+assets/nocopyright_music/*
+!assets/nocopyright_music/.gitkeep
+assets/source_videos/*
+!assets/source_videos/.gitkeep
+
+# Mídia
+*.mp4
+*.mkv
+*.mov
+*.wav
+*.mp3
+*.m4a
+
+# Modelos locais pesados
+# Exceção: assets/models/ é versionado — blaze_face_short_range.tflite (~224 KB)
+# é necessário para o MediaPipe FaceDetector funcionar. Sem ele, backend=none.
+/models/
+*.onnx
+*.bin
+*.safetensors
+!assets/models/*.tflite
+
+# Sistema
+.DS_Store
+*.log
+.env

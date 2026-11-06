@@ -1,0 +1,30 @@
+# Core do pipeline
+pydantic>=2.9
+PyYAML>=6.0
+numpy>=1.26
+scipy>=1.13
+
+# Áudio / transcrição
+# av<17 é OBRIGATÓRIO: faster-whisper 1.2.1 quebra com PyAV 19+
+# (TypeError: open() got an unexpected keyword argument 'metadata_errors').
+# O decodificador do módulo usa stdlib `wave`, mas o pin continua necessário
+# para o pacote importar limpo.
+faster-whisper==1.2.1
+av>=14,<17
+ctranslate2>=4.5
+librosa>=0.10
+soundfile>=0.12
+
+# Visão
+# OpenCV 5.x NÃO distribui os haarcascade XMLs: o fallback Haar só funciona se
+# assets/models/haarcascade_frontalface_default.xml for vendorizado. O backend
+# principal é MediaPipe (mp.tasks.vision.FaceDetector), que exige
+# assets/models/blaze_face_short_range.tflite (~224 KB, versionado no repo).
+opencv-python-headless>=4.10
+mediapipe>=0.10
+
+# Utilitários
+rich>=13.7
+
+# Dev
+pytest>=8.0

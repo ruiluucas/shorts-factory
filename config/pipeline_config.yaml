@@ -1,0 +1,45 @@
+project:
+  name: "GTA Shorts Factory"
+  target_audience: "pt-BR"
+  aspect_ratio: "9:16"
+  resolution:
+    width: 1080
+    height: 1920
+  framerate: 30
+
+legal_gatekeeper:
+  default_status: "PENDING"
+  require_explicit_monetization_rights: true
+  allowed_statuses: ["APPROVED"]
+
+transcription:
+  engine: "whisperx"
+  model: "large-v3"
+  language: "pt"
+  align_model: "WAV2VEC2_ASR_LARGE_LV60K_960H"
+  compute_type: "float16"
+
+scoring_weights:
+  reaction_intensity: 0.25
+  surprise_and_novelty: 0.20
+  narrative_completion: 0.20
+  event_clarity: 0.15
+  editing_potential: 0.10
+  audiovisual_quality: 0.10
+
+penalties:
+  lacks_context: -30
+  poor_audio: -25
+  passive_gameplay_cutscene: -40
+  excessive_repetition: -20
+
+audio_policy:
+  allow_commercial_music: false
+  local_sfx_library: "assets/sound_effects/"
+  local_music_library: "assets/nocopyright_music/"
+  ducking_db: -12.0
+
+crop_modes:
+  default: "split_screen"
+  fallback: "gameplay_centered"
+  facecam_threshold: 0.70
