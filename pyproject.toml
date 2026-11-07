@@ -1,0 +1,97 @@
+[project]
+name = "shorts-factory"
+version = "0.2.0"
+description = "Pipeline que transforma vídeos longos em shorts virais verticais 1080x1920 com trava jurídica obrigatória"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Rui Lucas Anthony Gomes" }]
+
+dependencies = [
+    "pydantic>=2.9",
+    "PyYAML>=6.0",
+    "numpy>=1.26",
+    "scipy>=1.13",
+    "faster-whisper==1.2.1",
+    "av>=14,<17",
+    "ctranslate2>=4.5",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "opencv-python-headless>=4.10",
+    "mediapipe>=0.10",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core"]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+exclude = [".venv", "node_modules", "workspace", "remotion", "assets"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RUF",  # ruff-specific
+    "LOG",  # logging
+    "G",    # logging format
+    "PIE",  # misc lints
+    "T20",  # print statements
+    "RET",  # return statements
+    "PTH",  # pathlib
+]
+ignore = [
+    # except cego é intencional nos fallbacks de CUDA/modelo (CPU catch-all);
+    # cada um tem log explícito logo abaixo. Ver docs/DECISIONS.md.
+    "BLE001",
+    # pathlib: alguns pontos usam str() para subprocess, não vale reescrever
+    "PTH",
+    # print é permitido só em scripts CLI/dev (main.py usa rich/logging)
+    "T201",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# testes podem usar assert e strings longas
+"tests/*" = ["S101", "PLR2004"]
+# scripts de fixture usam print para progresso no terminal
+"tests/fixtures/*" = ["T201"]
+"eval/*" = ["T201"]
+# main.py usa JobLogger, cujo .info(msg, stage=) NÃO interpola argumentos:
+# f-string é o único jeito de montar a mensagem. Ver docs/DECISIONS.md.
+"main.py" = ["G004"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core"]
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "gatekeeper: trava jurídica / direitos autorais",
+    "audio: transcrição e eventos sonoros",
+    "vision: análise visual (facecam, movimento)",
+    "scoring: detecção de virais e edit plans",
+    "render: Remotion e QC",
+    "slow: testes que geram mídia com ffmpeg",
+]

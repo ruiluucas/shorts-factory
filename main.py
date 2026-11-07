@@ -37,12 +37,11 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # --------------------------------------------------------------------------
 # caminhos e constantes
@@ -68,7 +67,7 @@ STATUS_REJECTED_RIGHTS = "REJECTED_RIGHTS"
 STATUS_SKIPPED_RENDER = "SKIPPED_RENDER"
 STATUS_FAILED = "FAILED"
 
-FALLBACK_CONFIG: Dict[str, Any] = {
+FALLBACK_CONFIG: dict[str, Any] = {
     "project": {
         "resolution": {"width": 1080, "height": 1920},
         "framerate": 30,
@@ -99,12 +98,12 @@ FALLBACK_CONFIG: Dict[str, Any] = {
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    return datetime.now(UTC).astimezone().isoformat(timespec="seconds")
 
 
-def load_config(path: Path = CONFIG_PATH) -> Dict[str, Any]:
+def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     """Carrega o YAML do projeto; cai no fallback se PyYAML não estiver instalado."""
-    cfg: Dict[str, Any] = json.loads(json.dumps(FALLBACK_CONFIG))
+    cfg: dict[str, Any] = json.loads(json.dumps(FALLBACK_CONFIG))
     if not path.exists():
         return cfg
     try:
@@ -123,7 +122,7 @@ def load_config(path: Path = CONFIG_PATH) -> Dict[str, Any]:
     return cfg
 
 
-def cfg_get(cfg: Dict[str, Any], dotted: str, default: Any = None) -> Any:
+def cfg_get(cfg: dict[str, Any], dotted: str, default: Any = None) -> Any:
     node: Any = cfg
     for part in dotted.split("."):
         if not isinstance(node, dict) or part not in node:
@@ -167,9 +166,9 @@ class JobLogger:
     def __init__(self, log_path: Path):
         self.log_path = log_path
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        self.entries: List[Dict[str, Any]] = []
+        self.entries: list[dict[str, Any]] = []
 
-    def _emit(self, level: str, stage: Optional[str], message: str, **extra: Any) -> None:
+    def _emit(self, level: str, stage: str | None, message: str, **extra: Any) -> None:
         entry = {"ts": now_iso(), "level": level, "stage": stage, "message": message}
         if extra:
             entry.update(extra)
@@ -181,13 +180,13 @@ class JobLogger:
         except OSError:
             pass
 
-    def info(self, message: str, stage: Optional[str] = None, **extra: Any) -> None:
+    def info(self, message: str, stage: str | None = None, **extra: Any) -> None:
         self._emit("INFO", stage, message, **extra)
 
-    def warn(self, message: str, stage: Optional[str] = None, **extra: Any) -> None:
+    def warn(self, message: str, stage: str | None = None, **extra: Any) -> None:
         self._emit("WARN", stage, message, **extra)
 
-    def error(self, message: str, stage: Optional[str] = None, **extra: Any) -> None:
+    def error(self, message: str, stage: str | None = None, **extra: Any) -> None:
         self._emit("ERROR", stage, message, **extra)
 
 
@@ -195,15 +194,15 @@ class StageTrace:
     """Registra a duração de cada etapa do pipeline."""
 
     def __init__(self) -> None:
-        self.stages: List[Dict[str, Any]] = []
-        self._current: Optional[Dict[str, Any]] = None
+        self.stages: list[dict[str, Any]] = []
+        self._current: dict[str, Any] | None = None
         self._t0: float = 0.0
 
     def start(self, name: str) -> None:
         self._current = {"stage": name, "started_at": now_iso()}
         self._t0 = time.perf_counter()
 
-    def finish(self, status: str = "OK", **extra: Any) -> Dict[str, Any]:
+    def finish(self, status: str = "OK", **extra: Any) -> dict[str, Any]:
         record = self._current or {"stage": "unknown", "started_at": now_iso()}
         record["duration_seconds"] = round(time.perf_counter() - self._t0, 3)
         record["finished_at"] = now_iso()
@@ -235,7 +234,7 @@ def require_binary(name: str) -> str:
     return found
 
 
-def ffprobe_json(path: Path) -> Dict[str, Any]:
+def ffprobe_json(path: Path) -> dict[str, Any]:
     ffprobe = require_binary("ffprobe")
     cmd = [
         ffprobe,
@@ -249,19 +248,17 @@ def ffprobe_json(path: Path) -> Dict[str, Any]:
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if proc.returncode != 0:
-        raise PipelineError(
-            "ffprobe", f"ffprobe falhou em {path}: {proc.stderr.strip()[:500]}"
-        )
+        raise PipelineError("ffprobe", f"ffprobe falhou em {path}: {proc.stderr.strip()[:500]}")
     return json.loads(proc.stdout or "{}")
 
 
-def probe_summary(info: Dict[str, Any]) -> Dict[str, Any]:
+def probe_summary(info: dict[str, Any]) -> dict[str, Any]:
     streams = info.get("streams", []) or []
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
     audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
     fmt = info.get("format", {}) or {}
 
-    def _num(value: Any) -> Optional[float]:
+    def _num(value: Any) -> float | None:
         try:
             return float(value)
         except (TypeError, ValueError):
@@ -276,8 +273,7 @@ def probe_summary(info: Dict[str, Any]) -> Dict[str, Any]:
             fps = None
 
     return {
-        "duration_seconds": _num(fmt.get("duration"))
-        or _num((video or {}).get("duration")),
+        "duration_seconds": _num(fmt.get("duration")) or _num((video or {}).get("duration")),
         "width": (video or {}).get("width"),
         "height": (video or {}).get("height"),
         "video_codec": (video or {}).get("codec_name"),
@@ -295,13 +291,13 @@ def probe_summary(info: Dict[str, Any]) -> Dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-def load_pipeline_modules() -> Dict[str, Any]:
+def load_pipeline_modules() -> dict[str, Any]:
     """
     Importa os módulos de análise de forma tolerante. Ausências são reportadas
     como PipelineError com mensagem clara na etapa correspondente — nunca
     inventamos resultados.
     """
-    mods: Dict[str, Any] = {
+    mods: dict[str, Any] = {
         "analyze_audio": None,
         "analyze_vision": None,
         "detect_candidates": None,
@@ -313,14 +309,14 @@ def load_pipeline_modules() -> Dict[str, Any]:
         from core.whisper_analyzer import analyze as analyze_audio  # type: ignore
 
         mods["analyze_audio"] = analyze_audio
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         mods["errors"]["whisper_analyzer"] = f"{type(exc).__name__}: {exc}"
 
     try:
         from core.vision_tracker import analyze as analyze_vision  # type: ignore
 
         mods["analyze_vision"] = analyze_vision
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         mods["errors"]["vision_tracker"] = f"{type(exc).__name__}: {exc}"
 
     try:
@@ -331,13 +327,13 @@ def load_pipeline_modules() -> Dict[str, Any]:
 
         mods["detect_candidates"] = detect_candidates
         mods["build_edit_plan"] = build_edit_plan
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         mods["errors"]["viral_detector"] = f"{type(exc).__name__}: {exc}"
 
     return mods
 
 
-def require_module(mods: Dict[str, Any], key: str, stage: str, module_name: str):
+def require_module(mods: dict[str, Any], key: str, stage: str, module_name: str):
     fn = mods.get(key)
     if fn is None:
         detail = mods.get("errors", {}).get(module_name, "módulo ausente")
@@ -355,9 +351,7 @@ def require_module(mods: Dict[str, Any], key: str, stage: str, module_name: str)
 # --------------------------------------------------------------------------
 
 
-def stage_metadata(
-    job_dir: Path, job_id: str, video: Path, creator: Optional[str], cfg: Dict[str, Any]
-) -> Dict[str, Any]:
+def stage_metadata(job_dir: Path, job_id: str, video: Path, creator: str | None, cfg: dict[str, Any]) -> dict[str, Any]:
     if not video.exists():
         raise PipelineError("metadata", f"vídeo de entrada não existe: {video}")
 
@@ -402,9 +396,7 @@ def stage_metadata(
 # --------------------------------------------------------------------------
 
 
-def ensure_rights_file(
-    job_dir: Path, job_id: str, video: Path, creator: Optional[str], cfg: Dict[str, Any]
-) -> Path:
+def ensure_rights_file(job_dir: Path, job_id: str, video: Path, creator: str | None, cfg: dict[str, Any]) -> Path:
     rights_path = job_dir / "rights.json"
     if rights_path.exists():
         return rights_path
@@ -427,7 +419,7 @@ def ensure_rights_file(
     return rights_path
 
 
-def check_rights(rights_path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
+def check_rights(rights_path: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     """
     Avalia o rights.json. Retorna um dict com 'ok' (bool) e o diagnóstico.
 
@@ -439,12 +431,10 @@ def check_rights(rights_path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
     allowed = cfg_get(cfg, "legal_gatekeeper.allowed_statuses", ["APPROVED"])
     if isinstance(allowed, str):
         allowed = [allowed]
-    require_commercial = bool(
-        cfg_get(cfg, "legal_gatekeeper.require_explicit_monetization_rights", True)
-    )
+    require_commercial = bool(cfg_get(cfg, "legal_gatekeeper.require_explicit_monetization_rights", True))
 
-    reasons: List[str] = []
-    raw: Dict[str, Any] = {}
+    reasons: list[str] = []
+    raw: dict[str, Any] = {}
 
     if not rights_path.exists():
         reasons.append(f"rights.json ausente em {rights_path}")
@@ -459,15 +449,11 @@ def check_rights(rights_path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
         status = str(raw.get("status", "")).strip().upper()
         status_ok = status in {str(a).strip().upper() for a in allowed}
         if not status_ok:
-            reasons.append(
-                f"status='{raw.get('status')}' não está em allowed_statuses={allowed}"
-            )
+            reasons.append(f"status='{raw.get('status')}' não está em allowed_statuses={allowed}")
 
         commercial = raw.get("commercial_permission")
         if require_commercial and commercial is not True:
-            reasons.append(
-                f"commercial_permission={commercial!r} (exige explicitamente true)"
-            )
+            reasons.append(f"commercial_permission={commercial!r} (exige explicitamente true)")
 
         if not str(raw.get("evidence_url_or_path", "")).strip():
             reasons.append("evidence_url_or_path vazio (sem prova de autorização)")
@@ -498,7 +484,7 @@ def check_rights(rights_path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-def _coerce_dict(result: Any, stage: str) -> Dict[str, Any]:
+def _coerce_dict(result: Any, stage: str) -> dict[str, Any]:
     if isinstance(result, dict):
         return result
     if hasattr(result, "model_dump"):
@@ -506,9 +492,7 @@ def _coerce_dict(result: Any, stage: str) -> Dict[str, Any]:
     raise PipelineError(stage, f"resultado inesperado do analisador: {type(result)!r}")
 
 
-def stage_transcript(
-    job_dir: Path, video: Path, mods: Dict[str, Any], logger: JobLogger
-) -> Dict[str, Any]:
+def stage_transcript(job_dir: Path, video: Path, mods: dict[str, Any], logger: JobLogger) -> dict[str, Any]:
     analyze_audio = require_module(mods, "analyze_audio", "transcript", "whisper_analyzer")
     logger.info(f"transcrevendo {video.name} (word-level, PT-BR)", stage="transcript")
     raw = analyze_audio(str(video), out_dir=str(job_dir))
@@ -522,12 +506,11 @@ def stage_transcript(
 
     write_json(job_dir / "transcript.json", transcript)
     logger.info(
-        f"{len(words)} palavras, device={transcript.get('device_used')}, "
-        f"model={transcript.get('model_used')}",
+        f"{len(words)} palavras, device={transcript.get('device_used')}, model={transcript.get('model_used')}",
         stage="transcript",
     )
     if not words:
-        logger.warn(
+        logger.warning(
             "transcrição sem palavras — candidatos dependerão só de visão/áudio",
             stage="transcript",
         )
@@ -535,9 +518,13 @@ def stage_transcript(
 
 
 def stage_vision(
-    job_dir: Path, video: Path, cfg: Dict[str, Any], mods: Dict[str, Any],
-    transcript: Dict[str, Any], logger: JobLogger,
-) -> Dict[str, Any]:
+    job_dir: Path,
+    video: Path,
+    cfg: dict[str, Any],
+    mods: dict[str, Any],
+    transcript: dict[str, Any],
+    logger: JobLogger,
+) -> dict[str, Any]:
     analyze_vision = require_module(mods, "analyze_vision", "vision", "vision_tracker")
     logger.info("amostragem de visão (facecam + movimento)", stage="vision")
     raw = analyze_vision(str(video), config=cfg)
@@ -556,15 +543,14 @@ def stage_vision(
     write_json(job_dir / "audio_events.json", audio_events)
 
     logger.info(
-        f"crop_mode recomendado={vision.get('recommended_crop_mode')} "
-        f"passive_ratio={vision.get('passive_ratio')}",
+        f"crop_mode recomendado={vision.get('recommended_crop_mode')} passive_ratio={vision.get('passive_ratio')}",
         stage="vision",
     )
     logger.info(f"{len(events)} eventos de áudio", stage="vision")
     return vision
 
 
-def serialize_candidate(candidate: Any) -> Dict[str, Any]:
+def serialize_candidate(candidate: Any) -> dict[str, Any]:
     if isinstance(candidate, dict):
         return candidate
     if hasattr(candidate, "model_dump"):
@@ -572,7 +558,7 @@ def serialize_candidate(candidate: Any) -> Dict[str, Any]:
     return dict(vars(candidate))
 
 
-def serialize_plan(plan: Any) -> Dict[str, Any]:
+def serialize_plan(plan: Any) -> dict[str, Any]:
     if isinstance(plan, dict):
         return plan
     if hasattr(plan, "model_dump"):
@@ -581,19 +567,21 @@ def serialize_plan(plan: Any) -> Dict[str, Any]:
 
 
 def stage_candidates(
-    job_dir: Path, job_id: str, transcript: Dict[str, Any], vision: Dict[str, Any],
-    cfg: Dict[str, Any], mods: Dict[str, Any], top_k: int, logger: JobLogger,
-) -> List[Any]:
-    detect_candidates = require_module(
-        mods, "detect_candidates", "candidates", "viral_detector"
-    )
+    job_dir: Path,
+    job_id: str,
+    transcript: dict[str, Any],
+    vision: dict[str, Any],
+    cfg: dict[str, Any],
+    mods: dict[str, Any],
+    top_k: int,
+    logger: JobLogger,
+) -> list[Any]:
+    detect_candidates = require_module(mods, "detect_candidates", "candidates", "viral_detector")
     logger.info(f"pontuando candidatos (top_k={top_k})", stage="candidates")
     found = detect_candidates(transcript, vision=vision, config=cfg, top_k=top_k)
     candidates = list(found or [])
     if not candidates:
-        raise PipelineError(
-            "candidates", "detector não retornou nenhum candidato viral"
-        )
+        raise PipelineError("candidates", "detector não retornou nenhum candidato viral")
 
     payload = {
         "job_id": job_id,
@@ -613,14 +601,18 @@ def stage_candidates(
 
 
 def stage_edit_plans(
-    job_dir: Path, job_id: str, video: Path, candidates: List[Any],
-    transcript: Dict[str, Any], vision: Dict[str, Any], cfg: Dict[str, Any],
-    mods: Dict[str, Any], logger: JobLogger,
-) -> List[Dict[str, Any]]:
-    build_edit_plan = require_module(
-        mods, "build_edit_plan", "edit_plan", "viral_detector"
-    )
-    plans: List[Dict[str, Any]] = []
+    job_dir: Path,
+    job_id: str,
+    video: Path,
+    candidates: list[Any],
+    transcript: dict[str, Any],
+    vision: dict[str, Any],
+    cfg: dict[str, Any],
+    mods: dict[str, Any],
+    logger: JobLogger,
+) -> list[dict[str, Any]]:
+    build_edit_plan = require_module(mods, "build_edit_plan", "edit_plan", "viral_detector")
+    plans: list[dict[str, Any]] = []
     for candidate in candidates:
         cand_dict = serialize_candidate(candidate)
         cand_id = safe_slug(str(cand_dict.get("candidate_id", "cand")))
@@ -656,9 +648,8 @@ def stage_edit_plans(
             music = plan.get("background_music_track")
             music_lib = str(cfg_get(cfg, "audio_policy.local_music_library", ""))
             if music and music_lib and not str(music).startswith(("assets/", music_lib)):
-                logger.warn(
-                    f"faixa '{music}' não está na biblioteca NoCopyright — removida "
-                    f"por audio_policy",
+                logger.warning(
+                    f"faixa '{music}' não está na biblioteca NoCopyright — removida por audio_policy",
                     stage="edit_plan",
                 )
                 plan["background_music_track"] = None
@@ -680,9 +671,7 @@ def stage_edit_plans(
 # --------------------------------------------------------------------------
 
 
-def stage_source_for_remotion(
-    video: Path, job_id: str, cand_id: str
-) -> Dict[str, Any]:
+def stage_source_for_remotion(video: Path, job_id: str, cand_id: str) -> dict[str, Any]:
     """
     Copia (ou linka) o vídeo de origem para ``remotion/public/`` com um nome
     determinístico e devolve o caminho que a composição deve usar.
@@ -724,9 +713,12 @@ def stage_source_for_remotion(
 
 
 def stage_render(
-    job_dir: Path, job_id: str, plan: Dict[str, Any], do_render: bool,
+    job_dir: Path,
+    job_id: str,
+    plan: dict[str, Any],
+    do_render: bool,
     logger: JobLogger,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     composition = str(plan.get("composition_template") or "ShortCinematic")
     cand_id = safe_slug(str(plan.get("candidate_id", "cand")))
     out_dir = job_dir / "render"
@@ -734,7 +726,7 @@ def stage_render(
     out_file = out_dir / f"{job_id}_{cand_id}.mp4"
 
     if not do_render:
-        logger.warn("render desabilitado (--no-render)", stage="render")
+        logger.warning("render desabilitado (--no-render)", stage="render")
         return {
             "status": "skipped",
             "reason": "render desabilitado por --no-render",
@@ -743,7 +735,7 @@ def stage_render(
         }
 
     if not REMOTION_DIR.exists():
-        logger.warn(f"diretório {REMOTION_DIR} ausente — render pulado", stage="render")
+        logger.warning(f"diretório {REMOTION_DIR} ausente — render pulado", stage="render")
         return {
             "status": "skipped",
             "reason": f"{REMOTION_DIR} não existe",
@@ -752,7 +744,7 @@ def stage_render(
         }
 
     if not (REMOTION_DIR / "node_modules").exists():
-        logger.warn(
+        logger.warning(
             "remotion/node_modules ausente (rode 'npm install') — render pulado",
             stage="render",
         )
@@ -764,7 +756,7 @@ def stage_render(
         }
 
     if not shutil.which("npx"):
-        logger.warn("npx não encontrado no PATH — render pulado", stage="render")
+        logger.warning("npx não encontrado no PATH — render pulado", stage="render")
         return {
             "status": "skipped",
             "reason": "npx não encontrado no PATH",
@@ -779,7 +771,7 @@ def stage_render(
     # deterministic job-scoped name and hand the composition that name.
     staging = stage_source_for_remotion(Path(plan["source_video_path"]), job_id, cand_id)
     if staging["status"] != "staged":
-        logger.warn(
+        logger.warning(
             f"não foi possível preparar o vídeo para o Remotion: {staging.get('reason')}",
             stage="render",
         )
@@ -860,7 +852,7 @@ _MAX_VOLUME_RE = re.compile(r"max_volume:\s*(?P<db>-?[\d.]+)")
 _PEAK_RE = re.compile(r"peak_level:\s*(?P<db>-?[\d.]+)")
 
 
-def _ffmpeg_log(args: List[str], timeout: int = 600) -> str:
+def _ffmpeg_log(args: list[str], timeout: int = 600) -> str:
     ffmpeg = require_binary("ffmpeg")
     proc = subprocess.run(
         [ffmpeg, "-hide_banner", "-nostats", *args],
@@ -872,10 +864,15 @@ def _ffmpeg_log(args: List[str], timeout: int = 600) -> str:
 
 
 def stage_qc(
-    job_dir: Path, job_id: str, rights_ok: bool, target: Dict[str, int],
-    music: Optional[str], render: Dict[str, Any], logger: JobLogger,
-) -> Dict[str, Any]:
-    failure_reasons: List[str] = []
+    job_dir: Path,
+    job_id: str,
+    rights_ok: bool,
+    target: dict[str, int],
+    music: str | None,
+    render: dict[str, Any],
+    logger: JobLogger,
+) -> dict[str, Any]:
+    failure_reasons: list[str] = []
     audio_clipping = False
     black_frames = False
     aspect_ok = False
@@ -883,9 +880,7 @@ def stage_qc(
 
     out_path = render.get("output_path")
     if render.get("status") != "rendered" or not out_path:
-        failure_reasons.append(
-            f"render skipped ({render.get('reason') or 'sem saída'}): QC não pôde ser executado"
-        )
+        failure_reasons.append(f"render skipped ({render.get('reason') or 'sem saída'}): QC não pôde ser executado")
         report = {
             "job_id": job_id,
             "passed": False,
@@ -899,7 +894,7 @@ def stage_qc(
             "render_status": render.get("status"),
         }
         write_json(job_dir / "qc.json", report)
-        logger.warn("QC reprovado: sem render válido", stage="qc")
+        logger.warning("QC reprovado: sem render válido", stage="qc")
         return report
 
     path = Path(out_path)
@@ -910,9 +905,7 @@ def stage_qc(
     height = summary.get("height") or 0
     aspect_ok = width == target["width"] and height == target["height"]
     if not aspect_ok:
-        failure_reasons.append(
-            f"resolução {width}x{height} != {target['width']}x{target['height']}"
-        )
+        failure_reasons.append(f"resolução {width}x{height} != {target['width']}x{target['height']}")
 
     if not summary.get("has_audio"):
         failure_reasons.append("MP4 renderizado sem stream de áudio")
@@ -927,9 +920,7 @@ def stage_qc(
 
     # --- clipping de áudio ------------------------------------------------
     if summary.get("has_audio"):
-        vol_log = _ffmpeg_log(
-            ["-i", str(path), "-af", "volumedetect", "-vn", "-f", "null", "-"]
-        )
+        vol_log = _ffmpeg_log(["-i", str(path), "-af", "volumedetect", "-vn", "-f", "null", "-"])
         max_match = _MAX_VOLUME_RE.search(vol_log)
         if max_match:
             max_db = float(max_match.group("db"))
@@ -938,16 +929,12 @@ def stage_qc(
                 failure_reasons.append(f"clipping de áudio (max_volume={max_db} dB)")
         else:
             # fallback: astats peaking
-            stats_log = _ffmpeg_log(
-                ["-i", str(path), "-af", "astats=metadata=1:reset=0", "-vn", "-f", "null", "-"]
-            )
+            stats_log = _ffmpeg_log(["-i", str(path), "-af", "astats=metadata=1:reset=0", "-vn", "-f", "null", "-"])
             peak_match = _PEAK_RE.search(stats_log)
             if peak_match:
                 audio_clipping = float(peak_match.group("db")) >= -0.1
                 if audio_clipping:
-                    failure_reasons.append(
-                        f"clipping de áudio (peak={peak_match.group('db')} dB)"
-                    )
+                    failure_reasons.append(f"clipping de áudio (peak={peak_match.group('db')} dB)")
 
     # --- quadros pretos ---------------------------------------------------
     black_log = _ffmpeg_log(
@@ -962,18 +949,13 @@ def stage_qc(
             "-",
         ]
     )
-    black_hits = [
-        (float(m.group("start")), float(m.group("end")))
-        for m in _BLACKDETECT_RE.finditer(black_log)
-    ]
+    black_hits = [(float(m.group("start")), float(m.group("end"))) for m in _BLACKDETECT_RE.finditer(black_log)]
     # barras cinematográficas aparecem como "preto" só se cobrirem o quadro
     # inteiro; blackdetect já considera a luminância média da região toda.
     black_duration = sum(end - start for start, end in black_hits)
     black_frames = black_duration > max(1.0, 0.25 * duration)
     if black_frames:
-        failure_reasons.append(
-            f"quadros pretos excessivos ({black_duration:.2f}s de {duration:.2f}s)"
-        )
+        failure_reasons.append(f"quadros pretos excessivos ({black_duration:.2f}s de {duration:.2f}s)")
 
     # --- política de áudio ------------------------------------------------
     if music and str(music).strip():
@@ -1005,14 +987,13 @@ def stage_qc(
         QCReport(**{k: report[k] for k in QCReport.model_fields if k in report})
     except ImportError:
         pass
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         report["schema_warning"] = f"{type(exc).__name__}: {exc}"
 
     write_json(job_dir / "qc.json", report)
     level = "INFO" if passed else "WARN"
     getattr(logger, level.lower() if level == "WARN" else "info")(
-        f"QC {'PASSOU' if passed else 'FALHOU'}"
-        + ("" if passed else f": {'; '.join(failure_reasons)}"),
+        f"QC {'PASSOU' if passed else 'FALHOU'}" + ("" if passed else f": {'; '.join(failure_reasons)}"),
         stage="qc",
     )
     return report
@@ -1024,9 +1005,14 @@ def stage_qc(
 
 
 def write_job_status(
-    job_dir: Path, job_id: str, status: str, exit_code: int, trace: StageTrace,
-    logger: JobLogger, **extra: Any,
-) -> Dict[str, Any]:
+    job_dir: Path,
+    job_id: str,
+    status: str,
+    exit_code: int,
+    trace: StageTrace,
+    logger: JobLogger,
+    **extra: Any,
+) -> dict[str, Any]:
     payload = {
         "job_id": job_id,
         "status": status,
@@ -1056,10 +1042,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     trace = StageTrace()
     trace_started = now_iso()
 
-    logger.info(
-        f"=== início do job {job_id} (video={video}, render={args.render}, "
-        f"dry_run={args.dry_run}) ==="
-    )
+    logger.info(f"=== início do job {job_id} (video={video}, render={args.render}, dry_run={args.dry_run}) ===")
 
     def fail(status: str, exit_code: int, stage: str, message: str, **extra: Any) -> int:
         logger.error(message, stage=stage)
@@ -1086,8 +1069,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         except PipelineError as exc:
             trace.finish("FAILED", error=exc.message)
             return fail(STATUS_FAILED, EXIT_FAILED, exc.stage, exc.message)
-        trace.finish("OK", sha256=metadata["sha256"][:12],
-                     duration=metadata["duration_seconds"])
+        trace.finish("OK", sha256=metadata["sha256"][:12], duration=metadata["duration_seconds"])
         logger.info(
             f"metadata: {metadata['width']}x{metadata['height']} "
             f"{metadata['duration_seconds']}s fps={metadata['fps']} "
@@ -1105,13 +1087,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             "checked_at": now_iso(),
             "rights_file": str(rights_path),
             "allowed_statuses": rights["allowed_statuses"],
-            "require_explicit_monetization_rights": rights[
-                "require_explicit_monetization_rights"
-            ],
+            "require_explicit_monetization_rights": rights["require_explicit_monetization_rights"],
             "observed_status": rights["rights"].get("status"),
-            "observed_commercial_permission": rights["rights"].get(
-                "commercial_permission"
-            ),
+            "observed_commercial_permission": rights["rights"].get("commercial_permission"),
             "approved": rights["ok"],
             "reasons": rights["reasons"],
             "overridable_by_cli": False,
@@ -1134,15 +1112,14 @@ def cmd_run(args: argparse.Namespace) -> int:
             )
         trace.finish("OK", rights_status=rights["rights"].get("status"))
         logger.info(
-            f"direitos APROVADOS (status={rights['rights'].get('status')}, "
-            f"commercial_permission=true)",
+            f"direitos APROVADOS (status={rights['rights'].get('status')}, commercial_permission=true)",
             stage="gatekeeper",
         )
 
         # ---------------- módulos de análise ----------------------------
         mods = load_pipeline_modules()
         for name, err in mods["errors"].items():
-            logger.warn(f"módulo '{name}' indisponível: {err}")
+            logger.warning(f"módulo '{name}' indisponível: {err}")
         write_json(
             job_dir / "modules.json",
             {
@@ -1163,8 +1140,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             transcript = stage_transcript(job_dir, video, mods, logger)
         except PipelineError as exc:
             trace.finish("FAILED", error=exc.message)
-            return fail(STATUS_FAILED, EXIT_FAILED, exc.stage, exc.message,
-                        modules=mods["errors"])
+            return fail(STATUS_FAILED, EXIT_FAILED, exc.stage, exc.message, modules=mods["errors"])
         trace.finish("OK", words=transcript.get("word_count"))
 
         # ---------------- etapa 3: visão + eventos de áudio -------------
@@ -1173,32 +1149,26 @@ def cmd_run(args: argparse.Namespace) -> int:
             vision = stage_vision(job_dir, video, cfg, mods, transcript, logger)
         except PipelineError as exc:
             trace.finish("FAILED", error=exc.message)
-            return fail(STATUS_FAILED, EXIT_FAILED, exc.stage, exc.message,
-                        modules=mods["errors"])
+            return fail(STATUS_FAILED, EXIT_FAILED, exc.stage, exc.message, modules=mods["errors"])
         trace.finish("OK", crop_mode=vision.get("recommended_crop_mode"))
 
         # ---------------- etapa 4: candidatos ---------------------------
         trace.start("candidates")
         try:
-            candidates = stage_candidates(
-                job_dir, job_id, transcript, vision, cfg, mods, args.top_k, logger
-            )
+            candidates = stage_candidates(job_dir, job_id, transcript, vision, cfg, mods, args.top_k, logger)
         except PipelineError as exc:
             trace.finish("FAILED", error=exc.message)
-            return fail(STATUS_FAILED, EXIT_FAILED, exc.stage, exc.message,
-                        modules=mods["errors"])
+            return fail(STATUS_FAILED, EXIT_FAILED, exc.stage, exc.message, modules=mods["errors"])
         trace.finish("OK", count=len(candidates))
 
         # ---------------- etapa 5: edit plans ---------------------------
         trace.start("edit_plan")
         try:
-            plans = stage_edit_plans(
-                job_dir, job_id, video, candidates, transcript, vision, cfg, mods, logger
-            )
+            plans = stage_edit_plans(job_dir, job_id, video, candidates, transcript, vision, cfg, mods, logger)
         except PipelineError as exc:
             trace.finish("FAILED", error=exc.message)
             return fail(STATUS_FAILED, EXIT_FAILED, exc.stage, exc.message)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             trace.finish("FAILED", error=str(exc))
             return fail(
                 STATUS_FAILED,
@@ -1209,7 +1179,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         trace.finish("OK", count=len(plans))
 
         if args.dry_run:
-            logger.warn("--dry-run: encerrando antes do render", stage="render")
+            logger.warning("--dry-run: encerrando antes do render", stage="render")
             trace.start("render")
             trace.finish("SKIPPED", reason="dry-run")
             return fail(
@@ -1225,7 +1195,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             "width": int(cfg_get(cfg, "project.resolution.width", 1080)),
             "height": int(cfg_get(cfg, "project.resolution.height", 1920)),
         }
-        all_renders: List[Dict[str, Any]] = []
+        all_renders: list[dict[str, Any]] = []
         trace.start("render")
         for plan in plans:
             result = stage_render(job_dir, job_id, plan, args.render, logger)
@@ -1244,11 +1214,15 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         # ---------------- etapa 7: QC -----------------------------------
         primary_plan = plans[0]
-        primary_render = all_renders[0] if all_renders else {
-            "status": "skipped",
-            "reason": "nenhum render",
-            "output_path": None,
-        }
+        primary_render = (
+            all_renders[0]
+            if all_renders
+            else {
+                "status": "skipped",
+                "reason": "nenhum render",
+                "output_path": None,
+            }
+        )
         trace.start("qc")
         qc = stage_qc(
             job_dir,
@@ -1266,13 +1240,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         if not any_rendered:
             final_status = STATUS_SKIPPED_RENDER
             exit_code = EXIT_OK
-            note = "; ".join(
-                r.get("reason") or "" for r in all_renders if r.get("reason")
-            ) or "nenhum render executado"
+            note = "; ".join(r.get("reason") or "" for r in all_renders if r.get("reason")) or "nenhum render executado"
         elif qc["passed"]:
             final_status = STATUS_COMPLETED
             exit_code = EXIT_OK
-            note = f"{len(plans)} plano(s), {sum(1 for r in all_renders if r['status']=='rendered')} render(s), QC OK"
+            note = f"{len(plans)} plano(s), {sum(1 for r in all_renders if r['status'] == 'rendered')} render(s), QC OK"
         else:
             final_status = STATUS_FAILED
             exit_code = EXIT_FAILED
@@ -1301,19 +1273,32 @@ def cmd_run(args: argparse.Namespace) -> int:
     except KeyboardInterrupt:
         trace.finish("INTERRUPTED")
         write_job_status(
-            job_dir, job_id, STATUS_FAILED, EXIT_FAILED, trace, logger,
-            started_at=trace_started, stage="interrupt",
+            job_dir,
+            job_id,
+            STATUS_FAILED,
+            EXIT_FAILED,
+            trace,
+            logger,
+            started_at=trace_started,
+            stage="interrupt",
             error="KeyboardInterrupt — execução cancelada pelo usuário",
         )
         print(f"\n[FAILED] job {job_id} interrompido pelo usuário", file=sys.stderr)
         return EXIT_FAILED
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         tb = traceback.format_exc()
         write_job_status(
-            job_dir, job_id, STATUS_FAILED, EXIT_FAILED, trace, logger,
-            started_at=trace_started, stage="unhandled",
-            error=f"{type(exc).__name__}: {exc}", traceback=tb,
+            job_dir,
+            job_id,
+            STATUS_FAILED,
+            EXIT_FAILED,
+            trace,
+            logger,
+            started_at=trace_started,
+            stage="unhandled",
+            error=f"{type(exc).__name__}: {exc}",
+            traceback=tb,
         )
         print(f"\n[FAILED] erro inesperado: {exc}\n{tb}", file=sys.stderr)
         return EXIT_FAILED
@@ -1336,9 +1321,7 @@ def cmd_init_job(args: argparse.Namespace) -> int:
         print(f"erro: vídeo não encontrado: {video}", file=sys.stderr)
         return EXIT_FAILED
 
-    status = "APPROVED" if args.approved else cfg_get(
-        cfg, "legal_gatekeeper.default_status", "PENDING"
-    )
+    status = "APPROVED" if args.approved else cfg_get(cfg, "legal_gatekeeper.default_status", "PENDING")
     rights = {
         "source_id": f"{job_id}:{video.name}",
         "creator_handle": args.creator or "",
@@ -1384,12 +1367,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--job-id", required=True, help="identificador do job")
     run.add_argument("--creator", default=None, help="handle do criador, ex: @rui")
     run.add_argument("--top-k", type=int, default=10, help="número de candidatos (default 10)")
-    run.add_argument("--render", dest="render", action="store_true", default=True,
-                     help="executa o render Remotion (default)")
-    run.add_argument("--no-render", dest="render", action="store_false",
-                     help="não renderiza (para em SKIPPED_RENDER)")
-    run.add_argument("--dry-run", action="store_true",
-                     help="só análise (metadata, gatekeeper, transcrição, visão, planos)")
+    run.add_argument(
+        "--render", dest="render", action="store_true", default=True, help="executa o render Remotion (default)"
+    )
+    run.add_argument("--no-render", dest="render", action="store_false", help="não renderiza (para em SKIPPED_RENDER)")
+    run.add_argument(
+        "--dry-run", action="store_true", help="só análise (metadata, gatekeeper, transcrição, visão, planos)"
+    )
     run.set_defaults(func=cmd_run)
 
     init = sub.add_parser("init-job", help="cria o rights.json de um job")
@@ -1398,14 +1382,13 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--creator", default=None)
     init.add_argument("--evidence", default=None, help="url ou path da autorização")
     init.add_argument("--expiration", default=None, help="data de expiração YYYY-MM-DD")
-    init.add_argument("--approved", action="store_true",
-                      help="marca APPROVED + commercial_permission=true")
+    init.add_argument("--approved", action="store_true", help="marca APPROVED + commercial_permission=true")
     init.set_defaults(func=cmd_init_job)
 
     return parser
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

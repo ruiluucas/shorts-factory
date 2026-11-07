@@ -15,7 +15,7 @@ import logging
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -47,7 +47,7 @@ DEFAULT_MODEL: str = "small"
 DEFAULT_COMPUTE_CUDA: str = "int8_float16"
 DEFAULT_COMPUTE_CPU: str = "int8"
 
-DEFAULT_CONFIG: Dict[str, Any] = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "transcription": {
         "engine": "faster-whisper",
         "model": DEFAULT_MODEL,
@@ -63,7 +63,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 # --------------------------------------------------------------------------- #
 # Configuração
 # --------------------------------------------------------------------------- #
-def load_config(path: Optional[Path | str] = None) -> Dict[str, Any]:
+def load_config(path: Path | str | None = None) -> dict[str, Any]:
     """Carrega o YAML do pipeline; em erro, devolve defaults com aviso no log."""
     cfg_path = Path(path) if path is not None else CONFIG_PATH
     try:
@@ -82,7 +82,7 @@ def load_config(path: Optional[Path | str] = None) -> Dict[str, Any]:
     return json.loads(json.dumps(DEFAULT_CONFIG))  # cópia profunda
 
 
-def _resolve_whisper_params(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _resolve_whisper_params(config: dict[str, Any] | None = None) -> dict[str, Any]:
     """Extrai parâmetros de transcrição do config, aplicando travas de VRAM.
 
     Lê `transcription.{model,language,compute_type}` e permite overrides via
@@ -127,7 +127,7 @@ def extract_audio(video_path: Path | str, out_wav: Path | str) -> Path:
         raise FileNotFoundError(f"Vídeo não encontrado: {video}")
     wav.parent.mkdir(parents=True, exist_ok=True)
 
-    cmd: List[str] = [
+    cmd: list[str] = [
         FFMPEG_BIN,
         "-y",
         "-hide_banner",
@@ -154,8 +154,7 @@ def extract_audio(video_path: Path | str, out_wav: Path | str) -> Path:
 
     if proc.returncode != 0:
         raise RuntimeError(
-            f"ffmpeg falhou (exit {proc.returncode}) em {video.name}: "
-            f"{(proc.stderr or '').strip()[:500]}"
+            f"ffmpeg falhou (exit {proc.returncode}) em {video.name}: {(proc.stderr or '').strip()[:500]}"
         )
     if not wav.is_file() or wav.stat().st_size <= 44:  # 44 bytes = header WAV vazio
         raise RuntimeError(f"ffmpeg gerou WAV vazio para {video}: {wav}")
@@ -204,14 +203,14 @@ _CUDA_LIB_CANDIDATES: tuple[str, ...] = (
     "/usr/lib/x86_64-linux-gnu",
 )
 # ctranslate2 pede estes SONAMEs; hosts com CUDA 13 só têm a versão .13.
-_CUDA_SONAME_MAP: Dict[str, tuple[str, ...]] = {
+_CUDA_SONAME_MAP: dict[str, tuple[str, ...]] = {
     "libcublas.so.12": ("libcublas.so.12", "libcublas.so.13", "libcublas.so"),
     "libcublasLt.so.12": ("libcublasLt.so.12", "libcublasLt.so.13", "libcublasLt.so"),
     "libcudart.so.12": ("libcudart.so.12", "libcudart.so.13", "libcudart.so"),
 }
 
 
-def _prepare_cuda_libs() -> Optional[str]:
+def _prepare_cuda_libs() -> str | None:
     """Torna libs cuBLAS/cudart visíveis ao ctranslate2 neste processo.
 
     Muitos hosts (CUDA 13) não têm os SONAMEs .12 que o ctranslate2 solicita.
@@ -222,9 +221,9 @@ def _prepare_cuda_libs() -> Optional[str]:
     import ctypes
     import os
 
-    found_dir: Optional[str] = None
+    found_dir: str | None = None
     for soname, alternatives in _CUDA_SONAME_MAP.items():
-        target: Optional[str] = None
+        target: str | None = None
         for alt in alternatives:
             for base in _CUDA_LIB_CANDIDATES:
                 candidate = os.path.join(base, alt)
@@ -251,9 +250,7 @@ def _prepare_cuda_libs() -> Optional[str]:
                     alias.symlink_to(target)
                 cur = os.environ.get("LD_LIBRARY_PATH", "")
                 if str(alias_dir) not in cur.split(":"):
-                    os.environ["LD_LIBRARY_PATH"] = (
-                        f"{alias_dir}:{cur}" if cur else str(alias_dir)
-                    )
+                    os.environ["LD_LIBRARY_PATH"] = f"{alias_dir}:{cur}" if cur else str(alias_dir)
                 logger.debug("Alias CUDA %s -> %s", soname, target)
             except OSError as exc:
                 logger.debug("Falha ao criar alias %s: %s", soname, exc)
@@ -289,7 +286,7 @@ def _run_whisper(
     language: str,
     beam_size: int,
     vad_filter: bool,
-) -> List[WordSegment]:
+) -> list[WordSegment]:
     """Uma passada do faster-whisper em (device, compute_type) fixos."""
     from faster_whisper import WhisperModel
 
@@ -313,7 +310,7 @@ def _run_whisper(
         beam_size=beam_size,
     )
 
-    words: List[WordSegment] = []
+    words: list[WordSegment] = []
     for seg in segments:  # generator: consome de fato (é aqui que o decode roda)
         for w in getattr(seg, "words", None) or []:
             text = (w.word or "").strip()
@@ -340,12 +337,12 @@ def _run_whisper(
 
 def transcribe(
     video_path: Path | str,
-    config: Optional[Dict[str, Any]] = None,
+    config: dict[str, Any] | None = None,
     device: str = "auto",
-    model_name: Optional[str] = None,
-    compute_type: Optional[str] = None,
-    wav_path: Optional[Path] = None,
-) -> tuple[List[WordSegment], str, str]:
+    model_name: str | None = None,
+    compute_type: str | None = None,
+    wav_path: Path | None = None,
+) -> tuple[list[WordSegment], str, str]:
     """Transcreve o vídeo word-level e retorna (words, device_used, model_used).
 
     `device='auto'` tenta CUDA e cai para CPU automaticamente em falha.
@@ -363,16 +360,16 @@ def transcribe(
     if cuda_compute == "float16":
         cuda_compute = DEFAULT_COMPUTE_CUDA
 
-    tmp_wav: Optional[Path] = None
+    tmp_wav: Path | None = None
     if wav_path is None:
         tmp_wav = Path("/tmp/gsf_test") / f"{Path(video_path).stem}_16k.wav"
         wav_path = extract_audio(video_path, tmp_wav)
 
-    attempts: List[tuple[str, str]] = []
+    attempts: list[tuple[str, str]] = []
     if device in ("auto", "cuda"):
         # Ordem de compute types na GPU: o configurado primeiro, depois os que
         # não dependem de kernels cuBLAS int8 (hosts com CUDA 13 rejeitam estes).
-        cuda_chain: List[str] = []
+        cuda_chain: list[str] = []
         for ct in (cuda_compute, "float16", DEFAULT_COMPUTE_CUDA, "int8"):
             if ct and ct not in cuda_chain:
                 cuda_chain.append(ct)
@@ -382,7 +379,7 @@ def transcribe(
     if not attempts:
         attempts = [("cpu", DEFAULT_COMPUTE_CPU)]
 
-    last_exc: Optional[Exception] = None
+    last_exc: Exception | None = None
     for idx, (dev, ctype) in enumerate(attempts):
         try:
             if dev == "cuda":
@@ -417,7 +414,7 @@ def transcribe(
 # --------------------------------------------------------------------------- #
 # Eventos de áudio
 # --------------------------------------------------------------------------- #
-def detect_audio_events(wav_path: Path | str, sr: int = 16000) -> Dict[str, Any]:
+def detect_audio_events(wav_path: Path | str, sr: int = 16000) -> dict[str, Any]:
     """RMS, picos de energia, clipping e classificação de silêncio."""
     import librosa
 
@@ -449,14 +446,14 @@ def detect_audio_events(wav_path: Path | str, sr: int = 16000) -> Dict[str, Any]
     rms = np.asarray(rms, dtype=np.float32)
 
     # Downsample para ~10 amostras/seg (não inflar o JSON).
-    target_len = max(1, int(round(duration * 10)))
+    target_len = max(1, round(duration * 10))
     rms_series = _resample_mean(rms, target_len)
 
     clipping_ratio = float(np.mean((y >= 0.99) | (y <= -0.99))) if y.size else 0.0
     mean_rms = float(np.mean(rms)) if rms.size else 0.0
     max_rms = float(np.max(rms)) if rms.size else 0.0
 
-    peaks: List[Dict[str, float]] = []
+    peaks: list[dict[str, float]] = []
     if rms.size:
         top_k = int(min(5, rms.size))
         top_idx = np.argpartition(rms, -top_k)[-top_k:]
@@ -474,7 +471,7 @@ def detect_audio_events(wav_path: Path | str, sr: int = 16000) -> Dict[str, Any]
 
     # Janela de 0.5 s para decidir "spike" (caos/reação).
     win = max(1, int(0.5 * sr / hop))
-    loud_spikes: List[Dict[str, float]] = []
+    loud_spikes: list[dict[str, float]] = []
     if rms.size >= win and max_rms > 0:
         win_means = _moving_mean(rms, win)
         loud_ref = float(np.percentile(win_means, 90))
@@ -507,7 +504,7 @@ def detect_audio_events(wav_path: Path | str, sr: int = 16000) -> Dict[str, Any]
                 i += 1
 
     is_quiet = bool(mean_rms < 0.005 and max_rms < 0.02)
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "rms_series": [round(float(v), 4) for v in rms_series],
         "peaks": peaks,
         "clipping_ratio": round(clipping_ratio, 6),
@@ -563,10 +560,10 @@ def _moving_mean(arr: np.ndarray, win: int) -> np.ndarray:
 # --------------------------------------------------------------------------- #
 def analyze(
     video_path: Path | str,
-    out_dir: Optional[Path | str] = None,
-    config: Optional[Dict[str, Any]] = None,
+    out_dir: Path | str | None = None,
+    config: dict[str, Any] | None = None,
     device: str = "auto",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Pipeline completo: extrai áudio, transcreve e detecta eventos de áudio."""
     started = time.perf_counter()
     video = Path(video_path)
@@ -576,21 +573,19 @@ def analyze(
     work_dir.mkdir(parents=True, exist_ok=True)
     wav = work_dir / f"{video.stem}_16k.wav"
 
-    audio_events: Dict[str, Any]
+    audio_events: dict[str, Any]
     try:
         extract_audio(video, wav)
         duration = _wav_duration(wav)
         audio_events = detect_audio_events(wav)
         if duration <= 0.0:
             duration = float(audio_events.get("duration", 0.0))
-        words, device_used, model_used = transcribe(
-            video, config=cfg, device=device, wav_path=wav
-        )
+        words, device_used, model_used = transcribe(video, config=cfg, device=device, wav_path=wav)
     except Exception as exc:
         logger.error("analyze falhou em %s: %s: %s", video, type(exc).__name__, exc)
         raise
 
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "video_path": str(video),
         "duration": round(float(duration), 3),
         "device_used": device_used,
@@ -619,9 +614,7 @@ def analyze(
 if __name__ == "__main__":
     import sys
 
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     if len(sys.argv) < 2:
         print("uso: python -m core.whisper_analyzer <video.mp4> [out_dir]")
         raise SystemExit(2)

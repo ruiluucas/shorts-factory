@@ -1,18 +1,17 @@
 """Contratos de dados do Shorts Factory (Pydantic v2)."""
 
-from enum import Enum
-from typing import List, Optional
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class RightsStatus(str, Enum):
+class RightsStatus(StrEnum):
     APPROVED = "APPROVED"
     PENDING = "PENDING"
     REJECTED = "REJECTED"
 
 
-class CategoryEnum(str, Enum):
+class CategoryEnum(StrEnum):
     FUNNY = "FUNNY"
     SURPRISE = "SURPRISE"
     FAIL = "FAIL"
@@ -27,7 +26,7 @@ class WordSegment(BaseModel):
     start: float
     end: float
     score: float
-    speaker: Optional[str] = None
+    speaker: str | None = None
 
 
 class RightsMetadata(BaseModel):
@@ -36,7 +35,7 @@ class RightsMetadata(BaseModel):
     status: RightsStatus
     commercial_permission: bool
     evidence_url_or_path: str
-    expiration_date: Optional[str] = None
+    expiration_date: str | None = None
 
 
 class ViralCandidate(BaseModel):
@@ -48,7 +47,7 @@ class ViralCandidate(BaseModel):
     score: float = Field(..., ge=0, le=100)
     hook_text: str
     justification: str
-    risk_flags: List[str] = []
+    risk_flags: list[str] = []
     confidence: float
 
 
@@ -59,9 +58,9 @@ class EditPlan(BaseModel):
     source_video_path: str
     output_duration_seconds: float
     crop_mode: str
-    words: List[WordSegment]
-    sfx_triggers: List[dict]
-    background_music_track: Optional[str] = None
+    words: list[WordSegment]
+    sfx_triggers: list[dict]
+    background_music_track: str | None = None
 
 
 class QCReport(BaseModel):
@@ -71,4 +70,4 @@ class QCReport(BaseModel):
     black_frames_detected: bool
     aspect_ratio_valid: bool
     rights_check_passed: bool
-    failure_reasons: List[str] = []
+    failure_reasons: list[str] = []

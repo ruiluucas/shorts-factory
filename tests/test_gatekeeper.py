@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -47,13 +46,18 @@ def test_pending_rights_blocks_pipeline(project_root, job_dir, media_dir):
     (job_dir / "rights.json").write_text(json.dumps(rights), encoding="utf-8")
 
     proc = run_main(
-        project_root, "run",
-        "--video", str(media_dir / "motion.mp4"),
-        "--job-id", "job_test",
+        project_root,
+        "run",
+        "--video",
+        str(media_dir / "motion.mp4"),
+        "--job-id",
+        "job_test",
         "--no-render",
     )
 
-    assert proc.returncode == 3, f"esperado exit 3 (REJECTED_RIGHTS), veio {proc.returncode}\n{proc.stdout}\n{proc.stderr}"
+    assert proc.returncode == 3, (
+        f"esperado exit 3 (REJECTED_RIGHTS), veio {proc.returncode}\n{proc.stdout}\n{proc.stderr}"
+    )
     assert not (job_dir / "transcript.json").exists(), "transcript NÃO pode ser gerado antes do gate"
 
 
@@ -69,9 +73,12 @@ def test_approved_without_commercial_permission_blocks(project_root, job_dir, me
     (job_dir / "rights.json").write_text(json.dumps(rights), encoding="utf-8")
 
     proc = run_main(
-        project_root, "run",
-        "--video", str(media_dir / "motion.mp4"),
-        "--job-id", "job_test",
+        project_root,
+        "run",
+        "--video",
+        str(media_dir / "motion.mp4"),
+        "--job-id",
+        "job_test",
         "--no-render",
     )
 
@@ -90,9 +97,12 @@ def test_rejected_rights_blocks(project_root, job_dir, media_dir):
     (job_dir / "rights.json").write_text(json.dumps(rights), encoding="utf-8")
 
     proc = run_main(
-        project_root, "run",
-        "--video", str(media_dir / "motion.mp4"),
-        "--job-id", "job_test",
+        project_root,
+        "run",
+        "--video",
+        str(media_dir / "motion.mp4"),
+        "--job-id",
+        "job_test",
         "--no-render",
     )
     assert proc.returncode == 3
@@ -101,11 +111,16 @@ def test_rejected_rights_blocks(project_root, job_dir, media_dir):
 def test_init_job_creates_pending_by_default(project_root, job_dir, media_dir):
     """init-job sem --approved deve criar rights.json PENDING."""
     proc = run_main(
-        project_root, "init-job",
-        "--job-id", "job_test",
-        "--video", str(media_dir / "motion.mp4"),
-        "--creator", "@canal",
-        "--evidence", "/tmp/permissao.png",
+        project_root,
+        "init-job",
+        "--job-id",
+        "job_test",
+        "--video",
+        str(media_dir / "motion.mp4"),
+        "--creator",
+        "@canal",
+        "--evidence",
+        "/tmp/permissao.png",
     )
     assert proc.returncode == 0, f"{proc.stdout}\n{proc.stderr}"
 
@@ -117,11 +132,16 @@ def test_init_job_creates_pending_by_default(project_root, job_dir, media_dir):
 def test_init_job_with_approved_flag(project_root, job_dir, media_dir):
     """init-job --approved cria APPROVED + commercial_permission=true."""
     proc = run_main(
-        project_root, "init-job",
-        "--job-id", "job_test",
-        "--video", str(media_dir / "motion.mp4"),
-        "--creator", "@canal",
-        "--evidence", "/tmp/permissao.png",
+        project_root,
+        "init-job",
+        "--job-id",
+        "job_test",
+        "--video",
+        str(media_dir / "motion.mp4"),
+        "--creator",
+        "@canal",
+        "--evidence",
+        "/tmp/permissao.png",
         "--approved",
     )
     assert proc.returncode == 0, f"{proc.stdout}\n{proc.stderr}"

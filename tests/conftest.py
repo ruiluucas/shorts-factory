@@ -28,10 +28,25 @@ def media_dir(tmp_path_factory) -> Path:
     motion = d / "motion.mp4"
     subprocess.run(
         [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-f", "lavfi", "-i", "testsrc2=size=1080x1920:rate=30:duration=10",
-            "-f", "lavfi", "-i", "sine=frequency=440:duration=10",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=1080x1920:rate=30:duration=10",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=10",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
             str(motion),
         ],
         check=True,
@@ -41,9 +56,18 @@ def media_dir(tmp_path_factory) -> Path:
     static = d / "static.mp4"
     subprocess.run(
         [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-f", "lavfi", "-i", "color=c=black:size=1080x1920:rate=30:duration=5",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:size=1080x1920:rate=30:duration=5",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
             str(static),
         ],
         check=True,
@@ -53,17 +77,36 @@ def media_dir(tmp_path_factory) -> Path:
     audio = d / "audio_mix.wav"
     subprocess.run(
         [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
-            "-t", "2", str(d / "silence.wav"),
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=16000:cl=mono",
+            "-t",
+            "2",
+            str(d / "silence.wav"),
         ],
         check=True,
     )
     subprocess.run(
         [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-f", "lavfi", "-i", "sine=frequency=1000:duration=2",
-            "-af", "volume=8dB", "-ar", "16000", "-ac", "1",
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=1000:duration=2",
+            "-af",
+            "volume=8dB",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
             str(audio),
         ],
         check=True,
@@ -75,17 +118,26 @@ def media_dir(tmp_path_factory) -> Path:
 def transcript_fixture(tmp_path) -> Path:
     """Transcript sintético PT-BR com reações fortes e timestamps coerentes."""
     words = []
-    t = 0.0
+
     script = [
-        ("mano", 0.0), ("olha", 0.3), ("isso", 0.55), ("caralho", 0.8),
-        ("que", 1.2), ("queda", 1.45), ("foi", 1.7), ("essa", 1.95),
-        ("meu", 2.3), ("deus", 2.55), ("não", 3.0), ("acredito", 3.25),
-        ("ele", 3.7), ("voou", 3.95), ("longe", 4.2),
+        ("mano", 0.0),
+        ("olha", 0.3),
+        ("isso", 0.55),
+        ("caralho", 0.8),
+        ("que", 1.2),
+        ("queda", 1.45),
+        ("foi", 1.7),
+        ("essa", 1.95),
+        ("meu", 2.3),
+        ("deus", 2.55),
+        ("não", 3.0),
+        ("acredito", 3.25),
+        ("ele", 3.7),
+        ("voou", 3.95),
+        ("longe", 4.2),
     ]
     for w, start in script:
-        words.append(
-            {"word": w, "start": start, "end": start + 0.25, "score": 0.95, "speaker": "SPEAKER_00"}
-        )
+        words.append({"word": w, "start": start, "end": start + 0.25, "score": 0.95, "speaker": "SPEAKER_00"})
 
     data = {
         "video_path": str(tmp_path / "motion.mp4"),
@@ -110,8 +162,13 @@ def transcript_fixture(tmp_path) -> Path:
 def vision_fixture(tmp_path) -> Path:
     """Visão com gameplay ativo e facecam presente."""
     samples = [
-        {"t": i * 0.5, "faces": 1, "face_box": {"x": 700, "y": 1200, "w": 300, "h": 300},
-         "motion": 0.6, "scene": "facecam"}
+        {
+            "t": i * 0.5,
+            "faces": 1,
+            "face_box": {"x": 700, "y": 1200, "w": 300, "h": 300},
+            "motion": 0.6,
+            "scene": "facecam",
+        }
         for i in range(20)
     ]
     data = {

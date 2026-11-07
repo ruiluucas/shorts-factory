@@ -36,6 +36,16 @@ assets/source_videos/*
 *.mp3
 *.m4a
 
+# Fixtures de vídeo: geradas sob demanda por tests/fixtures/make_fixtures.py
+tests/fixtures/*.mp4
+tests/fixtures/*.wav
+# ...mas o script gerador e o gabarito JSON são versionados
+!tests/fixtures/*.py
+
+# Cache de etapas e relatórios de eval (gerados, não versionados)
+.eval_cache/
+eval/reports/
+
 # Modelos locais pesados
 # Exceção: assets/models/ é versionado — blaze_face_short_range.tflite (~224 KB)
 # é necessário para o MediaPipe FaceDetector funcionar. Sem ele, backend=none.

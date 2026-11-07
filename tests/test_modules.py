@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -15,9 +14,7 @@ def test_whisper_module_importable(project_root):
     """O módulo deve importar sem carregar o modelo (lazy loading)."""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        "whisper_analyzer", project_root / "core" / "whisper_analyzer.py"
-    )
+    spec = importlib.util.spec_from_file_location("whisper_analyzer", project_root / "core" / "whisper_analyzer.py")
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -96,8 +93,14 @@ def test_vision_analyze_returns_expected_keys(project_root, media_dir):
 
     result = analyze(media_dir / "motion.mp4")
     for key in (
-        "width", "height", "duration", "samples",
-        "facecam_ratio", "mean_motion", "passive_ratio", "recommended_crop_mode",
+        "width",
+        "height",
+        "duration",
+        "samples",
+        "facecam_ratio",
+        "mean_motion",
+        "passive_ratio",
+        "recommended_crop_mode",
     ):
         assert key in result, f"falta chave {key} no retorno de analyze()"
 
@@ -127,7 +130,23 @@ def test_candidates_score_range(project_root):
         "words": [
             {"word": w, "start": i * 0.35, "end": i * 0.35 + 0.3, "score": 0.9, "speaker": None}
             for i, w in enumerate(
-                "mano olha isso caralho que queda foi essa meu deus não acredito ele voou longe".split()
+                [
+                    "mano",
+                    "olha",
+                    "isso",
+                    "caralho",
+                    "que",
+                    "queda",
+                    "foi",
+                    "essa",
+                    "meu",
+                    "deus",
+                    "não",
+                    "acredito",
+                    "ele",
+                    "voou",
+                    "longe",
+                ]
             )
         ],
         "audio_events": {
@@ -153,9 +172,7 @@ def test_passive_penalty_reduces_score(project_root):
         "duration": 30.0,
         "words": [
             {"word": w, "start": i * 0.4, "end": i * 0.4 + 0.3, "score": 0.9, "speaker": None}
-            for i, w in enumerate(
-                ("olha isso caralho " * 8).split()
-            )
+            for i, w in enumerate(("olha isso caralho " * 8).split())
         ],
         "audio_events": {
             "peaks": [{"start": 1.0, "end": 1.3, "energy": 0.9}],
@@ -168,8 +185,13 @@ def test_passive_penalty_reduces_score(project_root):
     active_vision = {
         "duration": 30.0,
         "samples": [
-            {"t": i, "faces": 1, "face_box": {"x": 0, "y": 0, "w": 300, "h": 300},
-             "motion": 0.6, "scene": "gameplay_active"}
+            {
+                "t": i,
+                "faces": 1,
+                "face_box": {"x": 0, "y": 0, "w": 300, "h": 300},
+                "motion": 0.6,
+                "scene": "gameplay_active",
+            }
             for i in range(30)
         ],
         "facecam_ratio": 0.5,
@@ -180,8 +202,7 @@ def test_passive_penalty_reduces_score(project_root):
     passive_vision = {
         **active_vision,
         "samples": [
-            {"t": i, "faces": 0, "face_box": None, "motion": 0.02, "scene": "cutscene_passive"}
-            for i in range(30)
+            {"t": i, "faces": 0, "face_box": None, "motion": 0.02, "scene": "cutscene_passive"} for i in range(30)
         ],
         "passive_ratio": 1.0,
         "mean_motion": 0.02,
@@ -214,7 +235,21 @@ def test_edit_plan_validates_against_schema(project_root, tmp_path):
         "words": [
             {"word": w, "start": i * 0.4, "end": i * 0.4 + 0.3, "score": 0.9, "speaker": "S0"}
             for i, w in enumerate(
-                "olha isso mano caralho que queda foi essa meu deus não acredito nele".split()
+                [
+                    "olha",
+                    "isso",
+                    "mano",
+                    "caralho",
+                    "que",
+                    "queda",
+                    "foi",
+                    "essa",
+                    "meu",
+                    "deus",
+                    "não",
+                    "acredito",
+                    "nele",
+                ]
             )
         ],
         "audio_events": {
@@ -227,8 +262,7 @@ def test_edit_plan_validates_against_schema(project_root, tmp_path):
     vision = {
         "duration": 30.0,
         "samples": [
-            {"t": i, "faces": 1, "face_box": {"x": 0, "y": 0, "w": 300, "h": 300},
-             "motion": 0.5, "scene": "facecam"}
+            {"t": i, "faces": 1, "face_box": {"x": 0, "y": 0, "w": 300, "h": 300}, "motion": 0.5, "scene": "facecam"}
             for i in range(30)
         ],
         "facecam_ratio": 1.0,

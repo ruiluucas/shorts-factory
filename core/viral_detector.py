@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import unicodedata
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any
 
 try:  # import normal quando rodando da raiz do projeto
     from core.schemas import CategoryEnum, EditPlan, ViralCandidate, WordSegment
@@ -29,7 +31,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "pipeline_config.yaml"
 
 # Pesos/penalidades de segurança caso o config venha incompleto.
-_FALLBACK_WEIGHTS: Dict[str, float] = {
+_FALLBACK_WEIGHTS: dict[str, float] = {
     "reaction_intensity": 0.25,
     "surprise_and_novelty": 0.20,
     "narrative_completion": 0.20,
@@ -37,7 +39,7 @@ _FALLBACK_WEIGHTS: Dict[str, float] = {
     "editing_potential": 0.10,
     "audiovisual_quality": 0.10,
 }
-_FALLBACK_PENALTIES: Dict[str, float] = {
+_FALLBACK_PENALTIES: dict[str, float] = {
     "lacks_context": -30.0,
     "poor_audio": -25.0,
     "passive_gameplay_cutscene": -40.0,
@@ -48,31 +50,160 @@ _FALLBACK_PENALTIES: Dict[str, float] = {
 # Léxicos PT-BR (normalizados: sem acento, minúsculas)
 # ---------------------------------------------------------------------------
 REACTION_WORDS = [
-    "caralho", "mano", "olha", "meu deus", "nao acredito", "que isso", "puta",
-    "vei", "serio", "oloco", "rapaz", "eita", "nossa", "caraca", "porra",
-    "mds", "deus", "uau", "wow", "cara", "vish", "ixi", "louco", "insano",
+    "caralho",
+    "mano",
+    "olha",
+    "meu deus",
+    "nao acredito",
+    "que isso",
+    "puta",
+    "vei",
+    "serio",
+    "oloco",
+    "rapaz",
+    "eita",
+    "nossa",
+    "caraca",
+    "porra",
+    "mds",
+    "deus",
+    "uau",
+    "wow",
+    "cara",
+    "vish",
+    "ixi",
+    "louco",
+    "insano",
 ]
 SURPRISE_WORDS = [
-    "nossa", "nunca", "impossivel", "inacreditavel", "impressionante", "serio",
-    "jura", "verdade", "bugou", "apareceu", "do nada", "olha isso", "primeira vez",
-    "que isso", "nao acredito", "uau", "wow", "surpresa", "inesperado",
+    "nossa",
+    "nunca",
+    "impossivel",
+    "inacreditavel",
+    "impressionante",
+    "serio",
+    "jura",
+    "verdade",
+    "bugou",
+    "apareceu",
+    "do nada",
+    "olha isso",
+    "primeira vez",
+    "que isso",
+    "nao acredito",
+    "uau",
+    "wow",
+    "surpresa",
+    "inesperado",
 ]
-FAIL_WORDS = ["caiu", "morreu", "perdi", "errei", "falhei", "deu ruim", "quebrou", "acabou", "game over", "cai", "morri"]
-CHAOS_WORDS = ["tudo", "bomba", "explodiu", "corre", "foge", "policia", "perseguicao", "tiro", "fogo", "panico", "desespero"]
-DISCOVERY_WORDS = ["achei", "descobri", "encontrei", "escondido", "secreto", "novo", "truque", "dica", "esse lugar", "olha isso"]
+FAIL_WORDS = [
+    "caiu",
+    "morreu",
+    "perdi",
+    "errei",
+    "falhei",
+    "deu ruim",
+    "quebrou",
+    "acabou",
+    "game over",
+    "cai",
+    "morri",
+]
+CHAOS_WORDS = [
+    "tudo",
+    "bomba",
+    "explodiu",
+    "corre",
+    "foge",
+    "policia",
+    "perseguicao",
+    "tiro",
+    "fogo",
+    "panico",
+    "desespero",
+]
+DISCOVERY_WORDS = [
+    "achei",
+    "descobri",
+    "encontrei",
+    "escondido",
+    "secreto",
+    "novo",
+    "truque",
+    "dica",
+    "esse lugar",
+    "olha isso",
+]
 TENSION_WORDS = ["medo", "cuidado", "quase", "vai", "calma", "silencio", "espera", "perigo", "nervoso", "tenso"]
 FUNNY_LAUGH = ["kkk", "haha", "rs", "lol", "morri de rir", "engracado", "piada"]
 
 _STOPWORDS = {
-    "a", "o", "e", "de", "que", "do", "da", "em", "um", "uma", "para", "com",
-    "nao", "se", "por", "mais", "as", "os", "no", "na", "eu", "tu", "ele",
-    "ela", "voce", "meu", "minha", "ai", "ja", "so", "aqui", "ali", "isso",
+    "a",
+    "o",
+    "e",
+    "de",
+    "que",
+    "do",
+    "da",
+    "em",
+    "um",
+    "uma",
+    "para",
+    "com",
+    "nao",
+    "se",
+    "por",
+    "mais",
+    "as",
+    "os",
+    "no",
+    "na",
+    "eu",
+    "tu",
+    "ele",
+    "ela",
+    "voce",
+    "meu",
+    "minha",
+    "ai",
+    "ja",
+    "so",
+    "aqui",
+    "ali",
+    "isso",
 }
 _VERB_HINTS = [
-    "e", "ta", "esta", "foi", "vai", "vou", "tem", "temos", "faz", "fez",
-    "olha", "olhei", "vi", "vou", "vamos", "chegou", "pega", "peguei", "cai",
-    "caiu", "morre", "morreu", "deu", "vai", "explodiu", "encontrei", "achei",
-    "corre", "vem", "sai", "saiu",
+    "e",
+    "ta",
+    "esta",
+    "foi",
+    "vai",
+    "vou",
+    "tem",
+    "temos",
+    "faz",
+    "fez",
+    "olha",
+    "olhei",
+    "vi",
+    "vou",
+    "vamos",
+    "chegou",
+    "pega",
+    "peguei",
+    "cai",
+    "caiu",
+    "morre",
+    "morreu",
+    "deu",
+    "vai",
+    "explodiu",
+    "encontrei",
+    "achei",
+    "corre",
+    "vem",
+    "sai",
+    "saiu",
 ]
 
 
@@ -94,7 +225,7 @@ def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
         v = float(value)
     except (TypeError, ValueError):
         return low
-    if v != v:  # NaN
+    if math.isnan(v):
         return low
     return max(low, min(high, v))
 
@@ -107,12 +238,12 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def _get_section(config: Dict[str, Any], name: str) -> Dict[str, Any]:
+def _get_section(config: dict[str, Any], name: str) -> dict[str, Any]:
     section = config.get(name) if isinstance(config, dict) else None
     return section if isinstance(section, dict) else {}
 
 
-def _weights(config: Dict[str, Any]) -> Dict[str, float]:
+def _weights(config: dict[str, Any]) -> dict[str, float]:
     """Pesos normalizados para somar 1.0 (config manda, defaults completam)."""
     raw = _get_section(config, "scoring_weights")
     merged = {k: _safe_float(raw.get(k), v) for k, v in _FALLBACK_WEIGHTS.items()}
@@ -122,24 +253,24 @@ def _weights(config: Dict[str, Any]) -> Dict[str, float]:
     return {k: max(0.0, v) / total for k, v in merged.items()}
 
 
-def _penalties(config: Dict[str, Any]) -> Dict[str, float]:
+def _penalties(config: dict[str, Any]) -> dict[str, float]:
     """Penalidades do config como valores negativos."""
     raw = _get_section(config, "penalties")
-    out: Dict[str, float] = {}
+    out: dict[str, float] = {}
     for key, default in _FALLBACK_PENALTIES.items():
         val = _safe_float(raw.get(key), default)
         out[key] = -abs(val)
     return out
 
 
-def _iter_words(transcript: Any) -> List[Dict[str, Any]]:
+def _iter_words(transcript: Any) -> list[dict[str, Any]]:
     """Extrai palavras válidas (word/start/end numéricos) de um transcript."""
     if not isinstance(transcript, dict):
         return []
     words = transcript.get("words")
     if not isinstance(words, list):
         return []
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for w in words:
         if not isinstance(w, dict):
             continue
@@ -148,7 +279,7 @@ def _iter_words(transcript: Any) -> List[Dict[str, Any]]:
             continue
         start = _safe_float(w.get("start"), float("nan"))
         end = _safe_float(w.get("end"), float("nan"))
-        if start != start or end != end or end < start:
+        if math.isnan(start) or math.isnan(end) or end < start:
             continue
         out.append(
             {
@@ -163,9 +294,9 @@ def _iter_words(transcript: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def _to_word_segments(words: Sequence[Dict[str, Any]]) -> List[WordSegment]:
+def _to_word_segments(words: Sequence[dict[str, Any]]) -> list[WordSegment]:
     """Converte dicts de palavra em WordSegment (pydantic)."""
-    segments: List[WordSegment] = []
+    segments: list[WordSegment] = []
     for w in words:
         segments.append(
             WordSegment(
@@ -179,39 +310,39 @@ def _to_word_segments(words: Sequence[Dict[str, Any]]) -> List[WordSegment]:
     return segments
 
 
-def _audio_events(transcript: Any) -> Dict[str, Any]:
+def _audio_events(transcript: Any) -> dict[str, Any]:
     ev = transcript.get("audio_events") if isinstance(transcript, dict) else None
     return ev if isinstance(ev, dict) else {}
 
 
-def _peaks(transcript: Any) -> List[Dict[str, float]]:
+def _peaks(transcript: Any) -> list[dict[str, float]]:
     """Picos de áudio normalizados para [{start,end,energy}]."""
-    out: List[Dict[str, float]] = []
+    out: list[dict[str, float]] = []
     for p in _audio_events(transcript).get("peaks") or []:
         if not isinstance(p, dict):
             continue
         start = _safe_float(p.get("start"), float("nan"))
         end = _safe_float(p.get("end"), float("nan"))
-        if start != start or end != end or end < start:
+        if math.isnan(start) or math.isnan(end) or end < start:
             continue
         out.append({"start": start, "end": end, "energy": _clamp(_safe_float(p.get("energy"), 0.5))})
     out.sort(key=lambda x: x["start"])
     return out
 
 
-def _samples(vision: Any) -> List[Dict[str, Any]]:
+def _samples(vision: Any) -> list[dict[str, Any]]:
     if not isinstance(vision, dict):
         return []
     samples = vision.get("samples")
     return [s for s in samples if isinstance(s, dict)] if isinstance(samples, list) else []
 
 
-def _samples_in_range(vision: Any, start: float, end: float) -> List[Dict[str, Any]]:
+def _samples_in_range(vision: Any, start: float, end: float) -> list[dict[str, Any]]:
     """Amostras visuais cujo t cai na janela (tolerância de 1 amostra)."""
     out = []
     for s in _samples(vision):
         t = _safe_float(s.get("t"), float("nan"))
-        if t != t:
+        if math.isnan(t):
             continue
         if start - 0.001 <= t <= end + 0.001:
             out.append(s)
@@ -227,7 +358,7 @@ def _overlap(a0: float, a1: float, b0: float, b1: float) -> float:
     return max(0.0, min(a1, b1) - max(a0, b0))
 
 
-def _iou(a: Tuple[float, float], b: Tuple[float, float]) -> float:
+def _iou(a: tuple[float, float], b: tuple[float, float]) -> float:
     """IoU temporal 1-D."""
     inter = _overlap(a[0], a[1], b[0], b[1])
     union = (a[1] - a[0]) + (b[1] - b[0]) - inter
@@ -237,7 +368,7 @@ def _iou(a: Tuple[float, float], b: Tuple[float, float]) -> float:
 # ---------------------------------------------------------------------------
 # 1. Config
 # ---------------------------------------------------------------------------
-def load_config(path: Optional[str] = None) -> Dict[str, Any]:
+def load_config(path: str | None = None) -> dict[str, Any]:
     """Carrega o pipeline_config.yaml (path explícito ou o do projeto)."""
     cfg_path = Path(path) if path else _DEFAULT_CONFIG_PATH
     if yaml is None:
@@ -268,11 +399,11 @@ def _is_sentence_end(word: str) -> bool:
 
 
 def build_windows(
-    transcript: Dict[str, Any],
+    transcript: dict[str, Any],
     min_dur: float = 8.0,
     max_dur: float = 45.0,
     target_dur: float = 25.0,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Agrupa palavras em janelas respeitando fins de sentença (com overlap)."""
     words = _iter_words(transcript)
     if not words:
@@ -286,7 +417,7 @@ def build_windows(
     # Índices que começam uma sentença. Preferência: após pontuação .!?.
     # Pausa/gap só entra se o transcript não tiver pontuação alguma.
     n = len(words)
-    candidates: List[Tuple[int, int, bool]] = []  # (first_idx, last_idx, clean_boundary)
+    candidates: list[tuple[int, int, bool]] = []  # (first_idx, last_idx, clean_boundary)
     punct_starts: set[int] = {0}
     for idx in range(1, n):
         if _is_sentence_end(words[idx - 1]["word"]):
@@ -309,7 +440,7 @@ def build_windows(
     for si in starts_in_range:
         win_start = words[si]["start"]
         # Fecha na última palavra antes da fronteira seguinte mais próxima do alvo.
-        best_close: Optional[int] = None
+        best_close: int | None = None
         best_dist = float("inf")
         nxt_starts = [s for s in sentence_starts if s > si] + [n]
         for s in nxt_starts:
@@ -327,8 +458,9 @@ def build_windows(
         if best_close is None:
             # Nenhuma fronteira cabível: estende até caber o mínimo.
             close = si
-            while close + 1 < n and (words[close]["end"] - win_start < min_dur
-                                     or words[close + 1]["end"] - win_start <= max_dur):
+            while close + 1 < n and (
+                words[close]["end"] - win_start < min_dur or words[close + 1]["end"] - win_start <= max_dur
+            ):
                 close += 1
             if close <= si or words[close]["end"] - win_start < min_dur:
                 continue
@@ -339,8 +471,8 @@ def build_windows(
     if not candidates and n >= 1:
         candidates.append((0, n - 1, _is_sentence_end(words[-1]["word"])))
 
-    windows: List[Dict[str, Any]] = []
-    seen: set[Tuple[float, float]] = set()
+    windows: list[dict[str, Any]] = []
+    seen: set[tuple[float, float]] = set()
     for first, last, _clean in candidates:
         start_t = words[first]["start"]
         end_t = words[last]["end"]
@@ -368,14 +500,14 @@ def _count_keywords(text: str, keywords: Iterable[str]) -> int:
     return sum(1 for kw in keywords if kw and kw in text)
 
 
-def _window_text(window: Dict[str, Any]) -> str:
+def _window_text(window: dict[str, Any]) -> str:
     parts = []
     for w in window.get("words", []):
         parts.append(w.word if isinstance(w, WordSegment) else str(w.get("word", "")))
     return _norm(" ".join(parts))
 
 
-def _audio_energy(window: Dict[str, Any], transcript: Any) -> float:
+def _audio_energy(window: dict[str, Any], transcript: Any) -> float:
     """Energia média dos picos dentro da janela (0 se não houver peaks)."""
     start, end = window["start"], window["end"]
     energies = [p["energy"] for p in _peaks(transcript) if _in_window(start, end, (p["start"] + p["end"]) / 2)]
@@ -394,7 +526,7 @@ def _audio_energy(window: Dict[str, Any], transcript: Any) -> float:
     return 0.0
 
 
-def _motion_in_window(window: Dict[str, Any], vision: Any) -> float:
+def _motion_in_window(window: dict[str, Any], vision: Any) -> float:
     """Movimento médio nas amostras da janela (0 se não houver visão)."""
     start, end = window["start"], window["end"]
     vals = [_clamp(_safe_float(s.get("motion"), 0.0)) for s in _samples_in_range(vision, start, end)]
@@ -404,7 +536,7 @@ def _motion_in_window(window: Dict[str, Any], vision: Any) -> float:
     return sum(vals) / len(vals)
 
 
-def _passive_ratio_in_window(window: Dict[str, Any], vision: Any) -> Optional[float]:
+def _passive_ratio_in_window(window: dict[str, Any], vision: Any) -> float | None:
     """passive_ratio efetivo da janela; None quando não há dado visual."""
     samples = _samples_in_range(vision, window["start"], window["end"])
     if samples:
@@ -419,17 +551,18 @@ def _passive_ratio_in_window(window: Dict[str, Any], vision: Any) -> Optional[fl
     return None
 
 
-def _motion_variation(window: Dict[str, Any], vision: Any) -> float:
+def _motion_variation(window: dict[str, Any], vision: Any) -> float:
     """Desvio padrão do motion normalizado = potencial de corte/câmera."""
-    vals = [_clamp(_safe_float(s.get("motion"), 0.0)) for s in _samples_in_range(vision, window["start"], window["end"])]
+    window_samples = _samples_in_range(vision, window["start"], window["end"])
+    vals = [_clamp(_safe_float(s.get("motion"), 0.0)) for s in window_samples]
     if len(vals) < 2:
         return 0.0
     mean = sum(vals) / len(vals)
     var = sum((v - mean) ** 2 for v in vals) / len(vals)
-    return _clamp((var ** 0.5) / 0.35)  # 0.35 ≈ variação "rica"
+    return _clamp((var**0.5) / 0.35)  # 0.35 ≈ variação "rica"
 
 
-def _starts_mid_sentence(window: Dict[str, Any], words: Sequence[Dict[str, Any]]) -> bool:
+def _starts_mid_sentence(window: dict[str, Any], words: Sequence[dict[str, Any]]) -> bool:
     """True se a janela começa logo após uma palavra sem fim de sentença."""
     if not words:
         return False
@@ -445,13 +578,13 @@ def _starts_mid_sentence(window: Dict[str, Any], words: Sequence[Dict[str, Any]]
     return not _is_sentence_end(prev["word"])
 
 
-def _repetition_ratio(window: Dict[str, Any]) -> float:
+def _repetition_ratio(window: dict[str, Any]) -> float:
     """Fração de conteúdo coberto por palavras repetidas (fora de stopwords)."""
     tokens = [_norm(w.word if isinstance(w, WordSegment) else str(w.get("word", ""))) for w in window.get("words", [])]
     tokens = [t for t in tokens if t and t not in _STOPWORDS]
     if len(tokens) < 4:
         return 0.0
-    counts: Dict[str, int] = {}
+    counts: dict[str, int] = {}
     for t in tokens:
         counts[t] = counts.get(t, 0) + 1
     repeated = sum(c for c in counts.values() if c > 1)
@@ -460,17 +593,18 @@ def _repetition_ratio(window: Dict[str, Any]) -> float:
 
 def _has_subject_verb(text: str) -> bool:
     """Heurística: presença de pronome/sujeito + verbo frequente PT-BR."""
-    has_subject = any(re.search(rf"\b{re.escape(s)}\b", text) for s in ("eu", "voce", "ele", "ela", "a gente", "nos", "o cara", "o cara"))
+    subject_pronouns = ("eu", "voce", "ele", "ela", "a gente", "nos", "o cara")
+    has_subject = any(re.search(rf"\b{re.escape(s)}\b", text) for s in subject_pronouns)
     has_verb = any(re.search(rf"\b{re.escape(v)}\b", text) for v in _VERB_HINTS)
     return has_subject and has_verb
 
 
 def score_window(
-    window: Dict[str, Any],
-    transcript: Dict[str, Any],
-    vision: Optional[Dict[str, Any]],
-    config: Dict[str, Any],
-) -> Dict[str, Any]:
+    window: dict[str, Any],
+    transcript: dict[str, Any],
+    vision: dict[str, Any] | None,
+    config: dict[str, Any],
+) -> dict[str, Any]:
     """Calcula as 6 dimensões (0-1), a nota final 0-100 e as penalidades."""
     weights = _weights(config)
     pen = _penalties(config)
@@ -498,7 +632,7 @@ def score_window(
     passive = _passive_ratio_in_window(window, vision)
 
     ev = _audio_events(transcript)
-    risk_flags: List[str] = []
+    risk_flags: list[str] = []
 
     # --- reaction_intensity
     n_reaction = _count_keywords(text, [_norm(k) for k in REACTION_WORDS])
@@ -519,7 +653,7 @@ def score_window(
     narrative_completion = _clamp(0.55 * sentence_q + 0.45 * dur_fit)
 
     # --- event_clarity
-    # 2.0–4.5 palavras/s é a faixa "inteligível mas animada".
+    # 2.0-4.5 palavras/s é a faixa "inteligível mas animada".
     if wps <= 0:
         density_q = 0.0
     elif wps < 2.0:
@@ -540,10 +674,9 @@ def score_window(
     clipping = _clamp(_safe_float(ev.get("clipping_ratio"), 0.0))
     clip_q = _clamp(1.0 - clipping / 0.05)  # 5% de clipping = zero
     mean_rms = _safe_float(ev.get("mean_rms"), 0.0)
-    if mean_rms <= 0:
-        rms_q = 0.5 if not ev else 0.3
-    else:
-        # Saudável em ~0.15-0.35; penaliza mudo e estourado.
+    # Saudável em ~0.15-0.35; penaliza mudo e estourado.
+    rms_q = 0.5 if not ev else 0.3
+    if mean_rms > 0:
         rms_q = _clamp(1.0 - abs(mean_rms - 0.25) / 0.35)
     passive_q = 1.0 if passive is None else _clamp(1.0 - passive)
     audiovisual_quality = _clamp(0.45 * clip_q + 0.30 * rms_q + 0.25 * passive_q)
@@ -559,7 +692,7 @@ def score_window(
     base_score = 100.0 * sum(components[k] * weights.get(k, 0.0) for k in components)
 
     # ----------------------------- penalidades -----------------------------
-    penalties_applied: List[str] = []
+    penalties_applied: list[str] = []
     total_penalty = 0.0
 
     def apply(name: str) -> None:
@@ -568,16 +701,17 @@ def score_window(
         penalties_applied.append(name)
 
     # passive_gameplay_cutscene
-    scene_tally: Dict[str, int] = {}
+    scene_tally: dict[str, int] = {}
     for s in _samples_in_range(vision, start, end):
         scene = str(s.get("scene") or "unknown")
         scene_tally[scene] = scene_tally.get(scene, 0) + 1
     n_samples = sum(scene_tally.values())
     passive_scene_majority = bool(
-        n_samples and ("cutscene_passive" in scene_tally or "passive" in scene_tally)
+        n_samples
+        and ("cutscene_passive" in scene_tally or "passive" in scene_tally)
         and (scene_tally.get("cutscene_passive", 0) + scene_tally.get("passive", 0)) >= 0.5 * n_samples
     )
-    if passive is not None and passive >= 0.65 or passive_scene_majority:
+    if (passive is not None and passive >= 0.65) or passive_scene_majority:
         apply("passive_gameplay_cutscene")
         risk_flags.append("passive_gameplay")
         risk_flags.append("cutscene_no_facecam")
@@ -625,20 +759,26 @@ def score_window(
 # ---------------------------------------------------------------------------
 # 4. Categoria
 # ---------------------------------------------------------------------------
-def classify_category(window: Dict[str, Any], scoring: Dict[str, Any]) -> CategoryEnum:
+def classify_category(window: dict[str, Any], scoring: dict[str, Any]) -> CategoryEnum:
     """Mapeia a janela para uma categoria viral por léxico + componentes."""
     text = _window_text(window)
     comps = scoring.get("components") or {}
     flags = set(scoring.get("risk_flags") or [])
 
-    scores: Dict[CategoryEnum, float] = {
-        CategoryEnum.FUNNY: 1.2 * _count_keywords(text, FUNNY_LAUGH) + 0.6 * _count_keywords(text, [_norm(k) for k in REACTION_WORDS]),
-        CategoryEnum.FAIL: 1.6 * _count_keywords(text, [_norm(k) for k in FAIL_WORDS]) + (0.5 if "poor_audio" in flags else 0.0),
-        CategoryEnum.CHAOS: 1.4 * _count_keywords(text, [_norm(k) for k in CHAOS_WORDS]) + 0.8 * _safe_float(comps.get("surprise_and_novelty")),
-        CategoryEnum.REACTION: 1.5 * _count_keywords(text, [_norm(k) for k in REACTION_WORDS]) + 0.8 * _safe_float(comps.get("reaction_intensity")),
-        CategoryEnum.SURPRISE: 1.5 * _count_keywords(text, [_norm(k) for k in SURPRISE_WORDS]) + 0.8 * _safe_float(comps.get("surprise_and_novelty")),
-        CategoryEnum.DISCOVERY: 1.5 * _count_keywords(text, [_norm(k) for k in DISCOVERY_WORDS]),
-        CategoryEnum.TENSION: 1.3 * _count_keywords(text, [_norm(k) for k in TENSION_WORDS]) + 0.5 * (1.0 - _safe_float(comps.get("editing_potential"))),
+    def _kw(words: list[str]) -> float:
+        return _count_keywords(text, [_norm(k) for k in words])
+
+    def _comp(name: str) -> float:
+        return _safe_float(comps.get(name))
+
+    scores: dict[CategoryEnum, float] = {
+        CategoryEnum.FUNNY: 1.2 * _kw(FUNNY_LAUGH) + 0.6 * _kw(REACTION_WORDS),
+        CategoryEnum.FAIL: 1.6 * _kw(FAIL_WORDS) + (0.5 if "poor_audio" in flags else 0.0),
+        CategoryEnum.CHAOS: 1.4 * _kw(CHAOS_WORDS) + 0.8 * _comp("surprise_and_novelty"),
+        CategoryEnum.REACTION: 1.5 * _kw(REACTION_WORDS) + 0.8 * _comp("reaction_intensity"),
+        CategoryEnum.SURPRISE: 1.5 * _kw(SURPRISE_WORDS) + 0.8 * _comp("surprise_and_novelty"),
+        CategoryEnum.DISCOVERY: 1.5 * _kw(DISCOVERY_WORDS),
+        CategoryEnum.TENSION: 1.3 * _kw(TENSION_WORDS) + 0.5 * (1.0 - _comp("editing_potential")),
     }
     best = max(scores.items(), key=lambda kv: (kv[1], -list(CategoryEnum).index(kv[0])))
     if best[1] <= 0.3:
@@ -656,22 +796,19 @@ def classify_category(window: Dict[str, Any], scoring: Dict[str, Any]) -> Catego
 # 5. Pipeline
 # ---------------------------------------------------------------------------
 def _make_id(index: int, start: float, end: float) -> str:
-    return f"cand_{index:03d}_{int(round(start * 1000)):07d}_{int(round(end * 1000)):07d}"
+    return f"cand_{index:03d}_{round(start * 1000):07d}_{round(end * 1000):07d}"
 
 
-def _hook_text(window: Dict[str, Any], max_words: int = 10) -> str:
+def _hook_text(window: dict[str, Any], max_words: int = 10) -> str:
     """Primeiras ~10 palavras da janela (gancho do thumbnail/legenda)."""
-    words = [
-        (w.word if isinstance(w, WordSegment) else str(w.get("word", "")))
-        for w in window.get("words", [])
-    ]
+    words = [(w.word if isinstance(w, WordSegment) else str(w.get("word", ""))) for w in window.get("words", [])]
     hook = " ".join(w for w in words[:max_words] if w).strip()
     if len(words) > max_words:
         hook += "..."
     return hook[:140] or "(sem transcrição)"
 
 
-def _justification(scoring: Dict[str, Any], category: CategoryEnum, duration: float) -> str:
+def _justification(scoring: dict[str, Any], category: CategoryEnum, duration: float) -> str:
     comps = scoring.get("components", {})
     top = sorted(comps.items(), key=lambda kv: kv[1], reverse=True)[:2]
     desc = ", ".join(f"{k}={v:.2f}" for k, v in top)
@@ -684,11 +821,11 @@ def _justification(scoring: Dict[str, Any], category: CategoryEnum, duration: fl
 
 
 def detect_candidates(
-    transcript: Dict[str, Any],
-    vision: Optional[Dict[str, Any]] = None,
-    config: Optional[Dict[str, Any]] = None,
+    transcript: dict[str, Any],
+    vision: dict[str, Any] | None = None,
+    config: dict[str, Any] | None = None,
     top_k: int = 10,
-) -> List[ViralCandidate]:
+) -> list[ViralCandidate]:
     """Pipeline completo: janelas → score → NMS → top_k ViralCandidate."""
     cfg = config if isinstance(config, dict) and config else load_config()
     if not isinstance(transcript, dict):
@@ -700,7 +837,7 @@ def detect_candidates(
         return []
 
     durations = [_safe_float(w["end"]) - _safe_float(w["start"]) for w in windows]
-    scored: List[Tuple[Dict[str, Any], Dict[str, Any], float]] = []
+    scored: list[tuple[dict[str, Any], dict[str, Any], float]] = []
     for w in windows:
         try:
             sc = score_window(w, transcript, vision, cfg)
@@ -714,7 +851,7 @@ def detect_candidates(
     scored.sort(key=lambda x: x[2], reverse=True)
 
     # NMS por IoU temporal
-    kept: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+    kept: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for w, sc, _norm in scored:
         span = (_safe_float(w["start"]), _safe_float(w["end"]))
         if any(_iou(span, (_safe_float(k["start"]), _safe_float(k["end"]))) > 0.45 for k, _ in kept):
@@ -723,7 +860,7 @@ def detect_candidates(
         if len(kept) >= max(1, int(top_k)):
             break
 
-    candidates: List[ViralCandidate] = []
+    candidates: list[ViralCandidate] = []
     for idx, (w, sc) in enumerate(kept, start=1):
         start, end = _safe_float(w["start"]), _safe_float(w["end"])
         category = classify_category(w, sc)
@@ -761,7 +898,7 @@ def detect_candidates(
 # ---------------------------------------------------------------------------
 # 6. EditPlan
 # ---------------------------------------------------------------------------
-def _sfx_type(peak: Dict[str, float], prev: Optional[Dict[str, float]]) -> str:
+def _sfx_type(peak: dict[str, float], prev: dict[str, float] | None) -> str:
     """Classifica o pico: riser (crescimento), whoosh (rápido) ou impact."""
     dur = max(0.0, peak["end"] - peak["start"])
     if prev is not None and peak["energy"] > prev["energy"] + 0.15:
@@ -774,9 +911,9 @@ def _sfx_type(peak: Dict[str, float], prev: Optional[Dict[str, float]]) -> str:
 def build_edit_plan(
     job_id: str,
     candidate: ViralCandidate,
-    transcript: Dict[str, Any],
-    vision: Optional[Dict[str, Any]],
-    config: Dict[str, Any],
+    transcript: dict[str, Any],
+    vision: dict[str, Any] | None,
+    config: dict[str, Any],
     source_video_path: str,
 ) -> EditPlan:
     """Monta o EditPlan (words, crop, sfx) de um candidato para o Remotion."""
@@ -785,7 +922,7 @@ def build_edit_plan(
     end = _safe_float(candidate.end_time, start)
 
     # Palavras dentro da janela, com tempos RELATIVOS ao início do corte.
-    words_in: List[WordSegment] = []
+    words_in: list[WordSegment] = []
     for w in _iter_words(transcript):
         overlap = _overlap(w["start"], w["end"], start, end)
         if overlap <= 0:
@@ -807,19 +944,14 @@ def build_edit_plan(
     recommended = None
     if isinstance(vision, dict):
         recommended = vision.get("recommended_crop_mode") or vision.get("crop_mode")
-    crop_mode = str(
-        recommended
-        or crop_modes.get("fallback")
-        or crop_modes.get("default")
-        or "gameplay_centered"
-    )
+    crop_mode = str(recommended or crop_modes.get("fallback") or crop_modes.get("default") or "gameplay_centered")
 
     template = "ShortSplitScreen" if crop_mode == "split_screen" else "ShortCinematic"
 
     # SFX: peaks dentro da janela, em tempo relativo.
-    sfx_triggers: List[Dict[str, Any]] = []
+    sfx_triggers: list[dict[str, Any]] = []
     peaks_in = [p for p in _peaks(transcript) if _in_window(start, end, (p["start"] + p["end"]) / 2)]
-    prev: Optional[Dict[str, float]] = None
+    prev: dict[str, float] | None = None
     for p in peaks_in:
         t_rel = round(max(0.0, p["start"] - start), 3)
         sfx_triggers.append(
@@ -835,7 +967,9 @@ def build_edit_plan(
         job_id=str(job_id),
         composition_template=template,
         candidate_id=candidate.candidate_id,
-        source_video_path=str(source_video_path or (transcript.get("video_path") if isinstance(transcript, dict) else "") or ""),
+        source_video_path=str(
+            source_video_path or (transcript.get("video_path") if isinstance(transcript, dict) else "") or ""
+        ),
         output_duration_seconds=round(max(0.1, end - start), 3),
         crop_mode=crop_mode,
         words=words_in,
@@ -844,7 +978,11 @@ def build_edit_plan(
     )
     logger.info(
         "build_edit_plan: %s (%s, %.1fs, %d palavras, %d sfx)",
-        plan.candidate_id, template, plan.output_duration_seconds, len(words_in), len(sfx_triggers),
+        plan.candidate_id,
+        template,
+        plan.output_duration_seconds,
+        len(words_in),
+        len(sfx_triggers),
     )
     return plan
 

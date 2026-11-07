@@ -22,8 +22,9 @@ import logging
 import math
 import os
 import threading
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any
 
 import cv2
 import numpy as np
@@ -65,15 +66,10 @@ em 0.0 mesmo sem movimento.
 PASSIVE_WINDOW = 4
 """Nº de amostras consecutivas de motion baixo para marcar cutscene."""
 
-_MODEL_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "assets"
-    / "models"
-    / "blaze_face_short_range.tflite"
-)
+_MODEL_PATH = Path(__file__).resolve().parent.parent / "assets" / "models" / "blaze_face_short_range.tflite"
 
 _haar_lock = threading.Lock()
-_haar_classifier: Optional["cv2.CascadeClassifier"] = None
+_haar_classifier: cv2.CascadeClassifier | None = None
 _haar_failed = False
 
 _mp_lock = threading.Lock()
@@ -86,7 +82,7 @@ _mp_failed = False
 # --------------------------------------------------------------------------
 
 
-def _load_config(config: Optional[dict] = None) -> dict:
+def _load_config(config: dict | None = None) -> dict:
     """Retorna config mesclada (YAML do projeto + override) ou defaults."""
     cfg: dict = {
         "facecam_threshold": DEFAULT_FACE_THRESHOLD,
@@ -99,7 +95,7 @@ def _load_config(config: Optional[dict] = None) -> dict:
             try:
                 import yaml
 
-                with open(yaml_path, "r", encoding="utf-8") as fh:
+                with open(yaml_path, encoding="utf-8") as fh:
                     config = (yaml.safe_load(fh) or {}).get("crop_modes", {})
             except Exception as exc:  # pragma: no cover - config opcional
                 logger.warning("Falha ao ler %s: %s (usando defaults)", yaml_path, exc)
@@ -123,9 +119,7 @@ def _load_config(config: Optional[dict] = None) -> dict:
 # --------------------------------------------------------------------------
 
 
-def sample_frames(
-    video_path: str | os.PathLike, fps_sample: float = 2.0
-) -> Iterator[tuple[float, np.ndarray]]:
+def sample_frames(video_path: str | os.PathLike, fps_sample: float = 2.0) -> Iterator[tuple[float, np.ndarray]]:
     """Itera `(timestamp_s, frame_bgr)` a `fps_sample` quadros por segundo.
 
     Pula quadros via `cap.grab()` (barato) e só decodifica com `retrieve()` os
@@ -144,7 +138,7 @@ def sample_frames(
         if not math.isfinite(src_fps) or src_fps <= 0:
             logger.warning("FPS inválido (%r) em %s; assumindo 30", src_fps, video_path)
             src_fps = 30.0
-        step = max(1, int(round(src_fps / fps_sample)))
+        step = max(1, round(src_fps / fps_sample))
 
         idx = 0
         while True:
@@ -210,7 +204,7 @@ def _get_mp_detector() -> Any:
     return _mp_detector
 
 
-def _get_haar() -> Optional["cv2.CascadeClassifier"]:
+def _get_haar() -> cv2.CascadeClassifier | None:
     """Abre o haarcascade frontalface do cv2.data, se existir. Cacheado."""
     global _haar_classifier, _haar_failed
     if _haar_classifier is not None or _haar_failed:
@@ -277,8 +271,13 @@ def detect_faces(frame: np.ndarray) -> list[dict]:
                 if bw <= 1 or bh <= 1:
                     continue
                 out.append(
-                    {"x": float(x), "y": float(y), "w": float(bw), "h": float(bh),
-                     "confidence": round(min(1.0, max(0.0, score)), 4)}
+                    {
+                        "x": float(x),
+                        "y": float(y),
+                        "w": float(bw),
+                        "h": float(bh),
+                        "confidence": round(min(1.0, max(0.0, score)), 4),
+                    }
                 )
             return out
         except Exception as exc:
@@ -289,11 +288,9 @@ def detect_faces(frame: np.ndarray) -> list[dict]:
         try:
             gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY) if small.ndim == 3 else small
             gray = cv2.equalizeHist(gray)
-            faces = haar.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5,
-                                          minSize=(30, 30))
+            faces = haar.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
             return [
-                {"x": float(x * sx), "y": float(y * sy), "w": float(fw * sx),
-                 "h": float(fh * sy), "confidence": 0.6}
+                {"x": float(x * sx), "y": float(y * sy), "w": float(fw * sx), "h": float(fh * sy), "confidence": 0.6}
                 for (x, y, fw, fh) in faces
             ]
         except Exception as exc:
@@ -307,7 +304,7 @@ def detect_faces(frame: np.ndarray) -> list[dict]:
 # --------------------------------------------------------------------------
 
 
-def motion_intensity(prev_gray: Optional[np.ndarray], curr_gray: Optional[np.ndarray]) -> float:
+def motion_intensity(prev_gray: np.ndarray | None, curr_gray: np.ndarray | None) -> float:
     """Intensidade de movimento em 0..1 entre dois frames grayscale.
 
     Combina frame-diff normalizado (robusto a cortes) e magnitude média do
@@ -324,9 +321,16 @@ def motion_intensity(prev_gray: Optional[np.ndarray], curr_gray: Optional[np.nda
         diff_score = float(np.mean(diff)) / 255.0
 
         flow = cv2.calcOpticalFlowFarneback(
-            prev_gray, curr_gray, None,
-            pyr_scale=0.5, levels=2, winsize=15,
-            iterations=2, poly_n=5, poly_sigma=1.1, flags=0,
+            prev_gray,
+            curr_gray,
+            None,
+            pyr_scale=0.5,
+            levels=2,
+            winsize=15,
+            iterations=2,
+            poly_n=5,
+            poly_sigma=1.1,
+            flags=0,
         )
         mag = np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2)
         h, w = prev_gray.shape[:2]
@@ -351,8 +355,8 @@ def motion_intensity(prev_gray: Optional[np.ndarray], curr_gray: Optional[np.nda
 def classify_scene(
     frame: np.ndarray,
     lag_frames: int = PASSIVE_WINDOW,
-    prev_gray: Optional[np.ndarray] = None,
-    motion: Optional[float] = None,
+    prev_gray: np.ndarray | None = None,
+    motion: float | None = None,
 ) -> str:
     """Classifica um frame em `'facecam' | 'gameplay_active' | 'cutscene_passive'`.
 
@@ -396,7 +400,7 @@ def classify_scene(
 
 def analyze(
     video_path: str | os.PathLike,
-    config: Optional[dict] = None,
+    config: dict | None = None,
     fps_sample: float = 2.0,
 ) -> dict:
     """Analisa o vídeo inteiro e recomenda o `crop_mode`.
@@ -424,7 +428,7 @@ def analyze(
     duration = frame_count / fps if frame_count else 0.0
 
     samples: list[dict] = []
-    prev_gray: Optional[np.ndarray] = None
+    prev_gray: np.ndarray | None = None
     low_run = 0
 
     for t, frame in sample_frames(video_path, fps_sample=fps_sample):
@@ -453,13 +457,15 @@ def analyze(
             else:
                 scene = "gameplay_active"
 
-        samples.append({
-            "t": round(float(t), 3),
-            "faces": len(faces),
-            "face_box": face_box,
-            "motion": round(float(motion), 6),
-            "scene": scene,
-        })
+        samples.append(
+            {
+                "t": round(float(t), 3),
+                "faces": len(faces),
+                "face_box": face_box,
+                "motion": round(float(motion), 6),
+                "scene": scene,
+            }
+        )
         prev_gray = gray
 
     n = len(samples)
@@ -472,7 +478,12 @@ def analyze(
 
     logger.info(
         "analyze %s: %d amostras, facecam_ratio=%.2f, mean_motion=%.4f, passive=%.2f -> %s",
-        video_path, n, facecam_ratio, mean_motion, passive_ratio, recommended,
+        video_path,
+        n,
+        facecam_ratio,
+        mean_motion,
+        passive_ratio,
+        recommended,
     )
 
     return {
