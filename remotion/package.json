@@ -1,11 +1,11 @@
 {
-  "name": "gta-shorts-factory",
+  "name": "shorts-factory",
   "version": "1.0.0",
   "private": true,
-  "description": "Remotion compositions for the GTA Shorts Factory vertical (1080x1920) pipeline",
+  "description": "Remotion compositions for the Shorts Factory vertical (1080x1920) pipeline",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts GTASplitScreen out/render.mp4",
+    "render": "remotion render src/index.ts ShortSplitScreen out/render.mp4",
     "compositions": "remotion compositions src/index.ts",
     "typecheck": "tsc --noEmit"
   },

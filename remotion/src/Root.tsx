@@ -1,7 +1,7 @@
 import React from "react";
 import { Composition, CalculateMetadataFunction } from "remotion";
-import { GTASplitScreen, GTASplitScreenProps } from "./compositions/GTASplitScreen";
-import { GTACinematic, GTACinematicProps } from "./compositions/GTACinematic";
+import { ShortSplitScreen, ShortSplitScreenProps } from "./compositions/ShortSplitScreen";
+import { ShortCinematic, ShortCinematicProps } from "./compositions/ShortCinematic";
 import { DEFAULT_DURATION_SECONDS, FPS, HEIGHT, WIDTH } from "./types";
 
 /**
@@ -39,7 +39,7 @@ const calculateMetadata: CalculateMetadataFunction<Record<string, unknown>> = ({
 const sampleProps = {
   job_id: "sample_job",
   candidate_id: "test",
-  composition_template: "GTACinematic",
+  composition_template: "ShortCinematic",
   source_video_path: "https://remotion.media/video.mp4",
   output_duration_seconds: 5,
   words: [
@@ -56,8 +56,8 @@ export const RemotionRoot: React.FC = () => {
   return (
     <>
       <Composition
-        id="GTASplitScreen"
-        component={GTASplitScreen as React.FC<Record<string, unknown>>}
+        id="ShortSplitScreen"
+        component={ShortSplitScreen as React.FC<Record<string, unknown>>}
         durationInFrames={defaultInFrames}
         fps={FPS}
         width={WIDTH}
@@ -70,8 +70,8 @@ export const RemotionRoot: React.FC = () => {
         }
       />
       <Composition
-        id="GTACinematic"
-        component={GTACinematic as React.FC<Record<string, unknown>>}
+        id="ShortCinematic"
+        component={ShortCinematic as React.FC<Record<string, unknown>>}
         durationInFrames={defaultInFrames}
         fps={FPS}
         width={WIDTH}

@@ -256,7 +256,7 @@ def test_edit_plan_validates_against_schema(project_root, tmp_path):
     EditPlan.model_validate(plan.model_dump(mode="json"))
     assert plan.job_id == "job_test"
     assert plan.crop_mode == "split_screen"
-    assert plan.composition_template == "GTASplitScreen"
+    assert plan.composition_template == "ShortSplitScreen"
     assert plan.words, "edit plan precisa carregar as palavras do corte"
 
 

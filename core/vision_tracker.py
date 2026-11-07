@@ -1,6 +1,6 @@
 """Análise visual de vídeo: facecam, intensidade de movimento e tipo de cena.
 
-Usado pelo scorer do GTA Shorts Factory para decidir o `crop_mode` do EditPlan
+Usado pelo scorer do Shorts Factory para decidir o `crop_mode` do EditPlan
 (`split_screen` vs `gameplay_centered`) e para penalizar cutscenes passivas.
 
 Pipeline de detecção de rosto (escolhida uma vez por processo, em ordem):

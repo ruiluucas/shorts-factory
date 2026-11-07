@@ -1,4 +1,4 @@
-# Pipeline GTA Shorts Factory
+# Pipeline Shorts Factory
 
 Documento técnico: como cada etapa funciona, quais contratos respeita e onde estender.
 
@@ -102,7 +102,7 @@ Contrato `EditPlan` (em `core/schemas.py`). Os campos que o Remotion consome:
 ```json
 {
   "job_id": "job_001",
-  "composition_template": "GTASplitScreen",
+  "composition_template": "ShortSplitScreen",
   "candidate_id": "cand_003",
   "source_video_path": "/abs/path/video.mp4",
   "output_duration_seconds": 22.4,
@@ -123,8 +123,8 @@ início do corte (`candidate.start_time`) para posicionar legendas. SFX usam
 
 Duas composições, ambas 1080x1920 @ 30 fps:
 
-- **`GTASplitScreen`** — gameplay em cima, facecam/letterbox embaixo, legendas karaokê.
-- **`GTACinematic`** — vídeo centralizado com barras pretas, legendas.
+- **`ShortSplitScreen`** — gameplay em cima, facecam/letterbox embaixo, legendas karaokê.
+- **`ShortCinematic`** — vídeo centralizado com barras pretas, legendas.
 
 Duração é dinâmica via `calculateMetadata`: `output_duration_seconds × framerate`.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GTA Shorts Factory — orquestrador CLI do pipeline.
+Shorts Factory — orquestrador CLI do pipeline.
 
 Uso:
     python main.py init-job --job-id JOB --video PATH --creator @handle --evidence PATH [--approved]
@@ -638,7 +638,7 @@ def stage_edit_plans(
         plan.setdefault("job_id", job_id)
         plan.setdefault("candidate_id", cand_id)
         plan["source_video_path"] = str(video.resolve())
-        plan.setdefault("composition_template", "GTACinematic")
+        plan.setdefault("composition_template", "ShortCinematic")
         plan.setdefault("crop_mode", cfg_get(cfg, "crop_modes.default", "split_screen"))
         plan.setdefault("words", transcript.get("words") or [])
         plan.setdefault("sfx_triggers", [])
@@ -727,7 +727,7 @@ def stage_render(
     job_dir: Path, job_id: str, plan: Dict[str, Any], do_render: bool,
     logger: JobLogger,
 ) -> Dict[str, Any]:
-    composition = str(plan.get("composition_template") or "GTACinematic")
+    composition = str(plan.get("composition_template") or "ShortCinematic")
     cand_id = safe_slug(str(plan.get("candidate_id", "cand")))
     out_dir = job_dir / "render"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1374,7 +1374,7 @@ def cmd_init_job(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="main.py",
-        description="GTA Shorts Factory — orquestrador do pipeline (viral → edit plan → render → QC)",
+        description="Shorts Factory — orquestrador do pipeline (viral → edit plan → render → QC)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)

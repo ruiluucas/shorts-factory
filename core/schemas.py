@@ -1,4 +1,4 @@
-"""Contratos de dados do GTA Shorts Factory (Pydantic v2)."""
+"""Contratos de dados do Shorts Factory (Pydantic v2)."""
 
 from enum import Enum
 from typing import List, Optional
@@ -54,7 +54,7 @@ class ViralCandidate(BaseModel):
 
 class EditPlan(BaseModel):
     job_id: str
-    composition_template: str  # ex: "GTASplitScreen", "GTACinematic"
+    composition_template: str  # ex: "ShortSplitScreen", "ShortCinematic"
     candidate_id: str
     source_video_path: str
     output_duration_seconds: float

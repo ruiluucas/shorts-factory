@@ -1,8 +1,10 @@
-# GTA Shorts Factory
+# Shorts Factory
 
-**Transforma vídeos longos de GTA em shorts virais verticais — com trava jurídica que se recusa a renderizar conteúdo sem permissão.**
+**Transforma vídeos longos em shorts virais verticais — com trava jurídica que se recusa a renderizar conteúdo sem permissão.**
 
-Pipeline de 7 etapas que assiste horas de gameplay, encontra os 20 segundos que fazem alguém parar de rolar, e entrega o MP4 1080x1920 legendado em PT-BR. Sem LLM no meio: cada decisão vem de sinal medido — energia de áudio, densidade de reação na fala, movimento de quadro, presença de facecam.
+Pipeline de 7 etapas que assiste horas de gravação, encontra os 20 segundos que fazem alguém parar de rolar, e entrega o MP4 1080x1920 legendado. Sem LLM no meio: cada decisão vem de sinal medido — energia de áudio, densidade de reação na fala, movimento de quadro, presença de rosto.
+
+Funciona com **qualquer vídeo**: gameplay, podcast, live, aula, vlog, stream. O que adapta o pipeline ao seu conteúdo é o `config/pipeline_config.yaml`.
 
 > `[REJECTED_RIGHTS]` — o pipeline aborta com exit code 3 antes de transcrever um único segundo quando `rights.json` não está explicitamente aprovado. **Não existe flag para burlar.**
 
@@ -13,11 +15,26 @@ Pipeline de 7 etapas que assiste horas de gameplay, encontra os 20 segundos que 
         │                              └── ❌ exit 3 → REJECTED_RIGHTS (nada roda)
         │                              └── ✅
         ├─ [2] TRANSCRIÇÃO ........ faster-whisper word-level PT-BR + picos RMS/clipping (librosa)
-        ├─ [3] VISÃO .............. MediaPipe FaceDetector + optical flow → facecam, cutscene passiva
+        ├─ [3] VISÃO .............. detector de rosto + optical flow → facecam, cena passiva
         ├─ [4] SCORING ............ 6 componentes ponderadas + 4 penalidades → nota 0–100
         ├─ [5] EDIT PLAN .......... JSON com palavras, SFX relativos, crop, trilha
         ├─ [6] RENDER ............. Remotion → MP4 1080x1920 @ 30fps h264
         └─ [7] QC ................. resolução, clipping, frames pretos, áudio, re-check de direitos
+```
+
+---
+
+## Branches
+
+| Branch | Conteúdo |
+|---|---|
+| **`main`** | Núcleo genérico. Composições `ShortSplitScreen` e `ShortCinematic`, watermark `SHORTS`, config neutra. |
+| **`gta`** | Customização GTA: composições `GTASplitScreen` / `GTACinematic`, branding e ajustes de conteúdo específicos. |
+
+Quer um perfil próprio (Minecraft, Valorant, podcast)? Use a branch `gta` como modelo:
+
+```bash
+git checkout gta -b meu-perfil
 ```
 
 ---
@@ -39,20 +56,20 @@ E penalidades que doem de verdade — medidas, não decorativas:
 
 | Penalidade | Peso | Quando |
 |---|---|---|
-| `passive_gameplay_cutscene` | **−40** | cutscene parada, sem facecam |
+| `passive_gameplay_cutscene` | **−40** | cena parada, sem rosto em quadro |
 | `lacks_context` | −30 | janela começa no meio de uma frase |
 | `poor_audio` | −25 | clipping alto ou áudio quase mudo |
 | `excessive_repetition` | −20 | mesmas palavras em loop |
 
-Num teste real, um candidato com base **82.9** caiu para **42.9** por uma única penalidade de cutscene passiva.
+Num teste real, um candidato com base **82.9** caiu para **42.9** por uma única penalidade de cena passiva.
 
 ---
 
 ## Instalação
 
 ```bash
-git clone https://github.com/ruiluucas/gta-shorts-factory.git
-cd gta-shorts-factory
+git clone https://github.com/ruiluucas/shorts-factory.git
+cd shorts-factory
 
 # Python 3.12 obrigatório (faster-whisper não tem wheel estável no 3.14)
 uv venv --python 3.12 .venv
@@ -72,7 +89,7 @@ cd remotion && npm install && cd ..
 ```bash
 .venv/bin/python main.py init-job \
   --job-id meu_job \
-  --video assets/source_videos/gameplay.mp4 \
+  --video assets/source_videos/entrada.mp4 \
   --creator "@canal_original" \
   --evidence "/caminho/da/permissao.png"
 ```
@@ -82,7 +99,7 @@ Sem `--approved` o status nasce `PENDING` — e o pipeline **não roda**.
 ### 2. Rodar
 
 ```bash
-.venv/bin/python main.py run --video assets/source_videos/gameplay.mp4 --job-id meu_job
+.venv/bin/python main.py run --video assets/source_videos/entrada.mp4 --job-id meu_job
 .venv/bin/python main.py run --help     # todas as flags
 ```
 
@@ -123,22 +140,22 @@ Cada job deixa uma trilha completa em `workspace/jobs/{job_id}/`:
 
 1. **Jurídica.** `rights.json` precisa de `status: "APPROVED"` **e** `commercial_permission: true`. Testado contra 6 tentativas de bypass (status trocado, permissão falsa, evidência vencida) — todas exit 3. O campo `overridable_by_cli` fica registrado como `false`.
 2. **Áudio.** Nenhuma faixa comercial. A biblioteca local só aceita arquivos do `catalog.json`, e todas as trilhas e SFX do repo são **sintetizados com ffmpeg** — zero sample de música protegida.
-3. **Conteúdo.** Cutscene passiva, áudio ruim, falta de contexto e repetição são penalizados pelo config, não por código escondido.
+3. **Conteúdo.** Cena passiva, áudio ruim, falta de contexto e repetição são penalizados pelo config, não por código escondido.
 
 ---
 
 ## Estrutura
 
 ```
-gta-shorts-factory/
+shorts-factory/
 ├── config/pipeline_config.yaml    # pesos, penalidades, política de áudio
 ├── core/
 │   ├── schemas.py                 # contratos Pydantic (fonte única de verdade)
 │   ├── whisper_analyzer.py        # transcrição + eventos de áudio
 │   ├── vision_tracker.py          # facecam, movimento, cena passiva
 │   └── viral_detector.py          # scoring, categorias, edit plans
-├── remotion/src/compositions/     # GTASplitScreen, GTACinematic
-├── assets/                        # SFX e trilhas sintéticas + modelo BlazeFace
+├── remotion/src/compositions/     # ShortSplitScreen, ShortCinematic
+├── assets/                        # SFX e trilhas sintéticas + modelo de rosto
 ├── tests/                         # 17 testes; 5 só da trava jurídica
 ├── docs/PIPELINE.md               # contratos por etapa + armadilhas de ambiente
 └── main.py                        # orquestrador CLI
@@ -166,15 +183,15 @@ Os testes usam `GSF_WORKSPACE_ROOT` para isolar o workspace — nenhum job real 
 
 O que ainda **não** está provado:
 
-- **Footage real de GTA VI** ainda não passou pelo pipeline. Os testes usam vídeo sintético (`testsrc2`) + TTS. O scoring respondeu corretamente, mas comportamento em gameplay real é teoria até alguém rodar.
-- **VRAM.** A GTX 1650 4 GB não sustenta `large-v3`; o módulo rebaixa para `small` automaticamente e loga o motivo. `float16` funciona; `int8_float16` falha por ABI CUDA (13.4 vs SONAMEs `.so.12` do ctranslate2) e cai para CPU.
+- **Footage real de jogo** ainda não passou pelo pipeline. Os testes usam vídeo sintético + TTS. O scoring respondeu corretamente, mas comportamento em gravação real é teoria até alguém rodar.
+- **VRAM.** A GTX 1650 4 GB não sustenta `large-v3`; o módulo rebaixa para `small` automaticamente e loga o motivo. `float16` funciona; `int8_float16` falha por ABI CUDA e cai para CPU.
 - **Diarização** exige pyannote, não instalado — `speaker: null` com warning.
-- **Sem facecam real** a visão classifica tudo como `gameplay_centered`. Esperado, não bug.
+- **Sem rosto em quadro** a visão classifica tudo como `gameplay_centered`. Esperado, não bug.
 
-Ver `docs/PIPELINE.md` para as armadilhas de ambiente (PyAV, CUDA, Haar cascade, staging do Remotion).
+Ver `docs/PIPELINE.md` para as armadilhas de ambiente (PyAV, CUDA, detector de rosto, staging do Remotion).
 
 ---
 
 ## Licença e uso responsável
 
-Código sob MIT. **O uso do conteúdo é responsabilidade de quem opera.** O pipeline foi construído em torno da premissa de que só se processa material com permissão explícita do criador original — a trava existe justamente para tornar difícil fazer o contrário. GTA é marca da Rockstar Games; este projeto não é afiliado nem endossado por ela.
+Código sob MIT. **O uso do conteúdo é responsabilidade de quem opera.** O pipeline foi construído em torno da premissa de que só se processa material com permissão explícita do criador original — a trava existe justamente para tornar difícil fazer o contrário.

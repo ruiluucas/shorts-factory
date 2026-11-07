@@ -814,7 +814,7 @@ def build_edit_plan(
         or "gameplay_centered"
     )
 
-    template = "GTASplitScreen" if crop_mode == "split_screen" else "GTACinematic"
+    template = "ShortSplitScreen" if crop_mode == "split_screen" else "ShortCinematic"
 
     # SFX: peaks dentro da janela, em tempo relativo.
     sfx_triggers: List[Dict[str, Any]] = []

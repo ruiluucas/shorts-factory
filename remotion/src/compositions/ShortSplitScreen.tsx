@@ -15,7 +15,7 @@ import { HEIGHT, WIDTH, normalizePlan } from "../types";
 export const GAMEPLAY_HEIGHT = Math.round(HEIGHT * 0.72);
 export const FACECAM_HEIGHT = HEIGHT - GAMEPLAY_HEIGHT;
 
-export type GTASplitScreenProps = EditPlanProps & {
+export type ShortSplitScreenProps = EditPlanProps & {
   /** zoom factor applied to the gameplay panel (simulates a crop) */
   gameplayZoom?: number;
   showTitle?: boolean;
@@ -47,7 +47,7 @@ const Panel: React.FC<{
 );
 
 /**
- * GTASplitScreen — the default vertical layout.
+ * ShortSplitScreen — the default vertical layout.
  *
  *   ┌───────────────┐
  *   │   GAMEPLAY    │  (16:10-ish, large)
@@ -57,7 +57,7 @@ const Panel: React.FC<{
  *
  * + karaoke captions and optional SFX badges.
  */
-export const GTASplitScreen: React.FC<GTASplitScreenProps> = (props) => {
+export const ShortSplitScreen: React.FC<ShortSplitScreenProps> = (props) => {
   const plan: NormalizedPlan = normalizePlan(props);
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -136,7 +136,7 @@ export const GTASplitScreen: React.FC<GTASplitScreenProps> = (props) => {
                 opacity: 0.5 + 0.5 * Math.sin(frame / 4),
               }}
             />
-            GTA VI
+            {plan.watermark ?? "SHORTS"}
           </div>
         ) : null}
       </div>

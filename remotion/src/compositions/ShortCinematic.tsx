@@ -14,7 +14,7 @@ import { HEIGHT, WIDTH, normalizePlan } from "../types";
 /** thick letterbox bars, in px of a 1920px tall frame */
 export const BAR_HEIGHT = Math.round(HEIGHT * 0.11);
 
-export type GTACinematicProps = EditPlanProps & {
+export type ShortCinematicProps = EditPlanProps & {
   /** black bar height as a fraction of the frame height (default 0.11) */
   barRatio?: number;
   /** optional vignette strength 0..1 */
@@ -23,10 +23,10 @@ export type GTACinematicProps = EditPlanProps & {
 };
 
 /**
- * GTACinematic — centered source footage with cinematic black bars and
+ * ShortCinematic — centered source footage with cinematic black bars and
  * karaoke captions sitting just above the bottom bar.
  */
-export const GTACinematic: React.FC<GTACinematicProps> = (props) => {
+export const ShortCinematic: React.FC<ShortCinematicProps> = (props) => {
   const plan: NormalizedPlan = normalizePlan(props);
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
@@ -107,7 +107,7 @@ export const GTACinematic: React.FC<GTACinematicProps> = (props) => {
           textTransform: "uppercase",
         }}
       >
-        GTA
+        {plan.watermark ?? "SHORTS"}
       </div>
 
       <Captions

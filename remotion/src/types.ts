@@ -1,5 +1,5 @@
 /**
- * Shared prop contracts for the GTA Shorts Factory Remotion compositions.
+ * Shared prop contracts for the Shorts Factory Remotion compositions.
  *
  * These mirror core/schemas.py (WordSegment / EditPlan) so that the JSON
  * produced by main.py can be fed straight in as `--props=edit_plan.json`.
@@ -40,6 +40,8 @@ export type EditPlanProps = {
   words?: WordSegment[];
   sfx_triggers?: SfxTrigger[];
   background_music_track?: string | null;
+  /** Texto do watermark no canto. Default: "SHORTS". */
+  watermark?: string;
   /** extra passthrough fields are tolerated */
   [key: string]: unknown;
 };
@@ -54,6 +56,8 @@ export type NormalizedPlan = {
   sfx: { time: number; asset: string; volume: number; label?: string }[];
   music: string | null;
   titleText: string;
+  /** Texto do watermark exibido na composição. */
+  watermark: string;
 };
 
 export const FPS = 30;
@@ -131,6 +135,7 @@ export const normalizePlan = (plan: EditPlanProps): NormalizedPlan => {
     words,
     sfx,
     music: plan.background_music_track ?? null,
-    titleText: (plan.job_id ?? "GTA") as string,
+    titleText: (plan.job_id ?? "SHORTS") as string,
+    watermark: (plan.watermark as string) ?? "SHORTS",
   };
 };

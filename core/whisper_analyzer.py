@@ -1,4 +1,4 @@
-"""Análise de áudio/transcrição do GTA Shorts Factory.
+"""Análise de áudio/transcrição do Shorts Factory.
 
 Transcrição word-level em pt-BR via faster-whisper + detecção de eventos
 sonoros (RMS, picos, clipping) via librosa/numpy.
