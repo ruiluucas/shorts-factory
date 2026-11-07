@@ -106,3 +106,86 @@ gabarito: `fala_reativa` deve ficar acima de 85 e `cena_passiva` deve continuar 
 
 **Não provado.** Isso vale para fixtures sintéticas. Gravação real de jogo tem ruído,
 música de fundo e sotaque — comportamento lá continua desconhecido.
+
+---
+
+## D-008 — Jev como camada de decisão, nunca de geração
+
+**Contexto.** O Jev (TypeSafe System One) foi cotado para "deixar os shorts mais
+inteligentes". A tentação natural é pedir texto a ele.
+
+**Decisão.** Jev só recebe perguntas tipadas (`choice`/`score`/`noul`/`box`) e devolve
+valores estruturados. Nenhuma legenda, título ou resumo passa por ele.
+
+**Motivo.** A doc oficial é explícita: *"No text generation, no parsing."* Ele é um
+classificador calibrado. Usá-lo como gerador de texto desperdiça a única coisa que
+ele faz melhor (probabilidade calibrada) e introduz risco de alucinação.
+
+**Consequência.** Legendas continuam vindo do Whisper word-level. Jev pontua janela,
+escolhe hook e dá veredicto de publish.
+
+---
+
+## D-009 — Uso de imagem desligado por medição, não por precaução
+
+**Contexto.** A API aceita `box` com imagem (`TypeSafe-Danger-Zone-Images: true`).
+Seria o caminho ideal para guiar crop 9:16 pelo alvo citado na fala (uso D).
+
+**Medição feita (2 testes reais, HTTP 200 nos dois):**
+
+| Imagem | Alvo óbvio | Resposta |
+|---|---|---|
+| Retângulo vermelho em x[0.59–0.84] y[0.50–0.78] | "há carro?" | `noul=0.14` (disse não), box errado, conf 0.03 |
+| Círculo amarelo em x[0.34–0.66] y[0.23–0.44] + texto grande | "há círculo?" | `noul=0.10` (disse não), box errado, conf 0.03 |
+
+**Decisão.** `visual_localization` fica heurístico (detector de rosto + movimento já
+existentes). `JevApiBackend` **não recebe quadros**, mesmo com `allow_remote: true`,
+a menos que `visual.send_frames_remote: true` seja ligado explicitamente.
+
+**Motivo.** Errar um círculo amarelo com confiança 0.03 não é ruído — é ausência de
+sinal. A própria doc marca Box como "Dreamer-ready … aren't yet up to our standards
+to call ready for production".
+
+**Reversível?** Sim. Reescreva os dois testes e compare; se acertar, ligue o flag.
+
+---
+
+## D-010 — VideoJev só como adaptador remoto
+
+**Contexto.** VideoJev-4B promete grounding temporal/espacial em vídeo.
+
+**Medição.** 4B em BF16 = ~8 GB de pesos; esta máquina tem 3.7 GB de VRAM livre.
+
+**Decisão.** `videojev_enabled: false` por padrão. O backend existe como cliente de
+endpoint externo, exige `allow_remote: true` **e** `videojev_endpoint` preenchido —
+os dois validados no startup. Nunca carrega pesos locais.
+
+**Motivo.** Tentar rodar em 4 GB é falha garantida e lenta. Falhar no startup com
+mensagem clara é melhor que OOM no meio do job.
+
+---
+
+## D-011 — `allow_remote: false` como trava dura, não sugestão
+
+**Decisão.** Configurar `backend: jev_api|openjev|videojev` com `allow_remote: false`
+é **erro de validação**, não warning. O pipeline não inicia.
+
+**Motivo.** A regra 4 do projeto diz que nenhum texto de transcrição sai da máquina
+sem permissão explícita. Uma trava que só emite warning é uma trava que vira log
+ignorado. Falhar cedo e alto é a única forma de garantir a propriedade.
+
+**Efeito prático.** Nenhum teste precisa de rede: `heuristic` é o padrão e não abre
+socket.
+
+---
+
+## D-012 — Usos A–E desligados até o eval provar ganho
+
+**Decisão.** Todos os toggles em `decision.uses` nascem `false`. A Fase 0 mediu o
+baseline; só depois do harness comparar se liga qualquer coisa.
+
+**Medição de não-regressão (feita).** Com `backend: heuristic` e tudo desligado:
+`fala_reativa` top score **85.22**, idêntico ao baseline 85.2 da Fase 0. Os 6
+componentes originais continuam sendo os únicos; `jev_semantic` não existe ainda.
+
+**Motivo.** "Mais inteligente" sem número é opinião. O gate é medir antes e depois.

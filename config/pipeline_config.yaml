@@ -43,3 +43,94 @@ crop_modes:
   default: "split_screen"
   fallback: "gameplay_centered"
   facecam_threshold: 0.70
+
+# ---------------------------------------------------------------------------
+# Camada de decisão (Jev / heurística)
+#
+# Regras (ver docs/JEV_NOTES.md e docs/DECISIONS.md):
+#   - offline por padrão: nenhuma chamada de rede sem allow_remote: true
+#   - todo uso vem DESLIGADO até o eval provar ganho
+#   - JEV_NOTES.md confirma que texto funciona bem e imagem NÃO é confiável,
+#     por isso `visual` está desligado e nunca envia quadros por padrão
+# ---------------------------------------------------------------------------
+decision:
+  # heuristic | jev_api | openjev | mock
+  # `heuristic` mantém o comportamento atual: nada muda no resultado.
+  backend: "heuristic"
+
+  # Trava de privacidade. false => NENHUM texto de transcrição sai da máquina.
+  allow_remote: false
+
+  timeout_s: 8.0
+  retries: 2
+  backoff_base_s: 0.5
+  max_backoff_s: 8.0
+
+  # Abaixo disso a resposta é descartada e o fallback assume.
+  min_confidence: 0.55
+
+  # Limite de chamadas por job (proteção de cota).
+  max_calls_per_job: 60
+
+  cache_dir: ".decision_cache"
+  cache_enabled: true
+
+  # Chave lida do ambiente; никогда do YAML.
+  api_key_env: "TYPESAFE_API_KEY"
+  model: "jev-latest"
+  base_url: "https://api.typesafe.ai"
+
+  # Endpoint compatível (OpenJev/Simple JEV). Só usado se backend == openjev.
+  openjev_base_url: ""
+  openjev_api_key_env: "OPENJEV_API_KEY"
+
+  # VideoJev: 4B em BF16 = ~8 GB de pesos, não cabe nos 4 GB da GTX 1650.
+  # Só funciona como endpoint externo, e exige allow_remote.
+  videojev_endpoint: ""
+  videojev_enabled: false
+
+  # Usos A-E. TODOS desligados por padrão (regra 3).
+  uses:
+    # A) scoring semântico (hook/payoff/standalone) dos candidatos
+    semantic_scoring: false
+    # B) escolha do hook / cold open
+    hook_selection: false
+    # C) publish gate de conteúdo (roda após o jurídico, nunca o substitui)
+    publish_gate: false
+    # D) localização visual — imagem NÃO confiável (medido), fica heurístico
+    visual_localization: false
+    # E) VideoJev grounding — inviável localmente, exige endpoint externo
+    video_grounding: false
+
+  # Pesos do componente semântico quando o uso A estiver ligado.
+  # Ao ligar A, os pesos passam a somar 1.00 com semantic_quality incluso.
+  semantic_weights:
+    use_llm: false
+    local_model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    component_weight: 0.15
+
+  publish_gate:
+    # Acima deste limiar a flag conta como acionada.
+    flag_threshold: 0.60
+    # Veredicto `review` se >=1 flag; `block` se >= block_at_flags flags.
+    block_at_flags: 3
+    block_always: ["copyright_risk"]
+    flags:
+      - profanity
+      - violence
+      - medical_advice
+      - financial_advice
+      - copyright_risk
+      - harassment
+      - politics
+
+  visual:
+    # Nunca envia quadros a backend remoto sem allow_remote + este flag.
+    send_frames_remote: false
+    # Rótulos de objeto procurados na fala (regras simples, sem LLM).
+    target_labels:
+      carro: ["carro", "car", "veiculo", "veículo", "automovel"]
+      pessoa: ["cara", "pessoa", "homem", "mulher", "ele", "ela"]
+      moto: ["moto", "motocicleta", "bike"]
+      aviao: ["aviao", "avião", "helicoptero", "helicóptero"]
+      animal: ["cachorro", "gato", "animal", "passaro", "pássaro"]
