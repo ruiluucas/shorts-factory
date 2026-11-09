@@ -5,7 +5,7 @@ SHELL := /bin/bash
 PY := .venv/bin/python
 PYTEST := $(PY) -m pytest
 RUFF := .venv/bin/ruff
-DEMO_VIDEO := assets/source_videos/entrada.mp4
+DEMO_VIDEO := tests/fixtures/fala_reativa.mp4
 DEMO_JOB := demo
 
 .DEFAULT_GOAL := help
@@ -36,8 +36,14 @@ lint-fix:  ## Corrige o que for seguro automaticamente
 fixtures:  ## Gera os vídeos sintéticos de teste (ffmpeg)
 	$(PY) tests/fixtures/make_fixtures.py
 
-eval:  ## Roda o harness de avaliação sobre as fixtures
-	$(PY) eval/run_eval.py
+eval:  ## (planejado) harness de avaliação — ainda não implementado
+	@if [ -f eval/run_eval.py ]; then \
+		$(PY) eval/run_eval.py; \
+	else \
+		echo "eval/run_eval.py ainda não existe — o harness de avaliação está"; \
+		echo "planejado mas não implementado. Rode 'make test' para a suíte atual."; \
+		exit 1; \
+	fi
 
 run-demo:  ## Pipeline completo no vídeo de demonstração
 	@test -f $(DEMO_VIDEO) || (echo "vídeo ausente: $(DEMO_VIDEO) — rode 'make fixtures'" && exit 1)
