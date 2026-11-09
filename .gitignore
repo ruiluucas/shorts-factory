@@ -27,6 +27,8 @@ assets/nocopyright_music/*
 !assets/nocopyright_music/.gitkeep
 assets/source_videos/*
 !assets/source_videos/.gitkeep
+assets/broll/*
+!assets/broll/.gitkeep
 
 # Mídia
 *.mp4
@@ -62,3 +64,6 @@ eval/reports/
 
 # Cache de decisão (Jev/heurística)
 .decision_cache/
+
+# B-roll baixado (cache) e acervo local do operador
+.broll_cache/

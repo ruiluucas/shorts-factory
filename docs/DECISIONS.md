@@ -189,3 +189,74 @@ baseline; só depois do harness comparar se liga qualquer coisa.
 componentes originais continuam sendo os únicos; `jev_semantic` não existe ainda.
 
 **Motivo.** "Mais inteligente" sem número é opinião. O gate é medir antes e depois.
+
+---
+
+## D-013 — B-roll com licença obrigatória, local antes de rede
+
+**Contexto.** O pedido é edição transformativa: legenda, corte de áudio e imagens
+sobre o que a pessoa está falando. O diferencial de qualidade vem do B-roll.
+
+**Decisão.** Duas fontes, nesta ordem:
+  1. `assets/broll/<assunto>/` — acervo do operador, vence sempre;
+  2. Openverse (Creative Commons), só se `allow_network: true`.
+
+**Por que Openverse e não Google Imagens/Pexels.** Openverse responde sem chave e
+filtra por licença comercial na própria query (`license_type=commercial`). Pexels e
+Pixabay exigem chave (401/400 medidos). Google Imagens não informa licença — usá-la
+seria exatamente o erro que derruba canais.
+
+**Trava de licença.** Só entram `by`, `by-sa`, `cc0`, `pdm`, `zero`. `by-nc` fica de
+fora mesmo sendo CC, porque corta a monetização. Cada imagem carrega
+`license` + `attribution` no `edit_plan`, então a proveniência é auditável.
+
+**Medido.** `GET api.openverse.org/v1/images/?q=carro&license_type=commercial` →
+HTTP 200, 240 resultados, licenças `by/2.0` e `by-sa/2.0` de provedor `flickr`.
+
+---
+
+## D-014 — B-roll no topo, com fade, e nunca dois ao mesmo tempo
+
+**Decisão.** Overlay centralizado no topo (`top: 150px`), largura máxima 62%,
+fade in/out de 8 frames, no máximo um por vez, no máximo 4 por corte, mínimo 5s
+entre eles.
+
+**Motivo.** A legenda ocupa o terço inferior. Empilhar duas imagens parece erro de
+render, não edição. E sinônimos repetidos ("olha o carro, olha o carro") colapsam
+numa imagem só, senão o short fica com três carros idênticos.
+
+---
+
+## D-015 — `JobLogger.warning()` como alias, não renomear os call sites
+
+**Contexto.** O ruff da Fase 0 reescreveu `logger.warn()` → `logger.warning()`
+(G010), mas `JobLogger` só tinha `warn`. A quebra ficou **latente** e explodiu no
+`stage_qc` (`AttributeError: 'JobLogger' object has no attribute 'warning'`).
+
+**Decisão.** Adicionar `warning()` como alias de `warn()` na própria classe.
+
+**Motivo.** Todo mundo escreve `.warning()`; o lint reescreve para `.warning()`.
+Manter só `warn` significa que a próxima autofix reintroduz o bug. Corrigir a classe
+elimina a classe de erro, não a ocorrência.
+
+**Lição.** Autofix de lint em código que usa um logger customizado precisa ser
+verificada contra a interface real da classe — não contra a do `logging`.
+
+---
+
+## D-016 — Staging obrigatório de assets para o Remotion
+
+**Contexto.** O primeiro render com B-roll falhou com 404 nas imagens.
+
+**Causa.** `OffthreadVideo` e `Img` não leem caminho absoluto: o servidor estático
+resolve tudo contra `<bundle>/public`. Duas falhas em sequência:
+  1. caminho absoluto → 404 direto;
+  2. arquivo estagiado em `public/` mas passado sem prefixo → 404 também.
+
+**Decisão.** `main.py` ganhou `stage_broll_for_remotion()`, que copia as imagens
+para `remotion/public/` e reescreve `plan["broll"][].path` para o nome puro; o
+componente aplica `resolveSrc()`, o mesmo resolvedor do vídeo, que prefixa
+`/public/`.
+
+**Medido.** Depois disso: `[COMPLETED]`, 2 renders, QC OK, e o frame em 4.5s mostra
+o box "CARRO" no topo enquanto o frame em 10s mostra só a legenda.

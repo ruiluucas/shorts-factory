@@ -5,6 +5,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { BrollOverlays } from "../components/BrollOverlays";
 import { Captions } from "../components/Captions";
 import { SfxBadges } from "../components/SfxBadges";
 import { SourceVideo } from "../components/SourceVideo";
@@ -110,6 +111,7 @@ export const ShortCinematic: React.FC<ShortCinematicProps> = (props) => {
         {plan.watermark ?? "SHORTS"}
       </div>
 
+      <BrollOverlays overlays={plan.broll} />
       <Captions
         words={plan.words}
         bottom={bar + 90}

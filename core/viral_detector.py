@@ -17,9 +17,23 @@ from pathlib import Path
 from typing import Any
 
 try:  # import normal quando rodando da raiz do projeto
-    from core.schemas import CategoryEnum, EditPlan, ViralCandidate, WordSegment
+    from core.schemas import (
+        BrollOverlay,
+        CategoryEnum,
+        EditPlan,
+        SilenceCut,
+        ViralCandidate,
+        WordSegment,
+    )
 except ImportError:  # pragma: no cover - fallback quando core/ está no sys.path
-    from schemas import CategoryEnum, EditPlan, ViralCandidate, WordSegment  # type: ignore
+    from schemas import (  # type: ignore
+        BrollOverlay,
+        CategoryEnum,
+        EditPlan,
+        SilenceCut,
+        ViralCandidate,
+        WordSegment,
+    )
 
 try:
     import yaml
@@ -976,14 +990,137 @@ def build_edit_plan(
         sfx_triggers=sfx_triggers,
         background_music_track=None,
     )
+
+    # --- edição orgânica: silêncio, ritmo e B-roll -------------------------
+    # Tudo silencioso por padrão: sem config, o plano é idêntico ao anterior.
+    plan = _apply_organic_edit(plan, transcript, cfg, start, end, seed=len(words_in))
+
     logger.info(
-        "build_edit_plan: %s (%s, %.1fs, %d palavras, %d sfx)",
+        "build_edit_plan: %s (%s, %.1fs, %d palavras, %d sfx, %d broll)",
         plan.candidate_id,
         template,
         plan.output_duration_seconds,
         len(words_in),
         len(sfx_triggers),
+        len(plan.broll),
     )
+    return plan
+
+
+# ---------------------------------------------------------------------------
+# 6b. Edição orgânica (silêncio, ritmo, B-roll)
+# ---------------------------------------------------------------------------
+def _apply_organic_edit(
+    plan: EditPlan,
+    transcript: dict[str, Any],
+    cfg: dict[str, Any],
+    cut_start: float,
+    cut_end: float,
+    *,
+    seed: int = 0,
+) -> EditPlan:
+    """Aplica corte de silêncio, punch-ins e B-roll ao plano.
+
+    Cada parte é opcional e controlada pelo bloco `organic_edit` do YAML.
+    Com o bloco ausente (config antiga), o plano volta inalterado — é isso
+    que mantém a saída idêntica à anterior.
+    """
+    conf = cfg.get("organic_edit") if isinstance(cfg, dict) else None
+    if not isinstance(conf, dict) or not conf.get("enabled", False):
+        return plan
+
+    from core.organic_edit import detect_emphasis, plan_silence_cuts
+
+    words_abs = [{"word": w.word, "start": w.start + cut_start, "end": w.end + cut_start} for w in plan.words]
+
+    # --- 1. corte de silêncio --------------------------------------------
+    silence_conf = conf.get("silence") or {}
+    if silence_conf.get("enabled", False):
+        edit = plan_silence_cuts(
+            words_abs,
+            cut_start,
+            cut_end,
+            enabled=True,
+            min_pause_ms=int(silence_conf.get("min_pause_ms", 700)),
+            keep_pause_ms=int(silence_conf.get("keep_pause_ms", 150)),
+            max_removed_ratio=float(silence_conf.get("max_removed_ratio", 0.35)),
+        )
+        if edit.removed:
+            plan.keep_ranges = [(r.start, r.end) for r in edit.keep_ranges]
+            plan.silence_cuts = [
+                SilenceCut(
+                    start=round(s, 3),
+                    end=round(e, 3),
+                    removed_s=round(e - s, 3),
+                )
+                for s, e in edit.removed
+            ]
+
+    # --- 2. ritmo: punch-ins por ênfase ----------------------------------
+    rhythm_conf = conf.get("rhythm") or {}
+    if rhythm_conf.get("enabled", False):
+        plan.punch_ins = detect_emphasis(
+            words_abs,
+            cut_start,
+            cut_end,
+            min_gap_s=float(rhythm_conf.get("min_gap_s", 2.0)),
+            lead_s=float(rhythm_conf.get("lead_s", 0.12)),
+            hold_s=float(rhythm_conf.get("hold_s", 0.55)),
+        )
+
+    # --- 3. B-roll -------------------------------------------------------
+    broll_conf = conf.get("broll") or {}
+    if broll_conf.get("enabled", False):
+        try:
+            from core.broll import BrollLibrary, plan_placements
+
+            labels = (cfg.get("decision") or {}).get("visual", {}).get("target_labels") or {}
+            if labels:
+                lib = BrollLibrary(
+                    local_dir=broll_conf.get("local_dir") or None,
+                    cache_dir=broll_conf.get("cache_dir") or None,
+                    allow_network=bool(broll_conf.get("allow_network", False)),
+                    timeout_s=float(broll_conf.get("timeout_s", 10.0)),
+                )
+                placements = plan_placements(
+                    words_abs,
+                    cut_start,
+                    cut_end,
+                    labels,
+                    lib,
+                    min_interval=float(broll_conf.get("min_interval_s", 5.0)),
+                    max_placements=int(broll_conf.get("max_per_cut", 4)),
+                    duration=float(broll_conf.get("duration_s", 2.5)),
+                )
+                plan.broll = [
+                    BrollOverlay(
+                        path=p.asset.path,
+                        label=p.asset.label,
+                        t_start=round(p.t_start, 3),
+                        t_end=round(p.t_end, 3),
+                        corner=p.corner,
+                        source=p.asset.source,
+                        license=p.asset.license,
+                        attribution=p.asset.attribution,
+                        score=round(p.asset.score, 3),
+                    )
+                    for p in placements
+                ]
+                if placements:
+                    logger.info(
+                        "broll: %d imagem(ns) para %s — licenças %s",
+                        len(placements),
+                        plan.candidate_id,
+                        sorted({p.asset.license for p in placements}),
+                    )
+        except Exception as exc:  # B-roll nunca derruba o job
+            logger.warning("broll falhou (%s) — plano segue sem overlay", exc)
+
+    # Duração ajustada pelo que sobrou após cortes de silêncio.
+    if plan.keep_ranges:
+        kept = sum(e - s for s, e in plan.keep_ranges)
+        plan.output_duration_seconds = round(max(0.1, kept), 3)
+
     return plan
 
 

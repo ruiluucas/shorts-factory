@@ -186,6 +186,11 @@ class JobLogger:
     def warn(self, message: str, stage: str | None = None, **extra: Any) -> None:
         self._emit("WARN", stage, message, **extra)
 
+    # Alias com o nome do módulo logging: `logger.warning()` é o que todo mundo
+    # escreve, e o ruff reescreve `warn` -> `warning` de qualquer forma.
+    def warning(self, message: str, stage: str | None = None, **extra: Any) -> None:
+        self._emit("WARN", stage, message, **extra)
+
     def error(self, message: str, stage: str | None = None, **extra: Any) -> None:
         self._emit("ERROR", stage, message, **extra)
 
@@ -712,6 +717,50 @@ def stage_source_for_remotion(video: Path, job_id: str, cand_id: str) -> dict[st
     }
 
 
+def stage_broll_for_remotion(plan: dict[str, Any], job_id: str, cand_id: str) -> int:
+    """Copia as imagens de B-roll para ``remotion/public/`` e reescreve os paths.
+
+    Mesma razão do vídeo: o servidor estático do Remotion só serve o que está
+    em ``<bundle>/public``. `Img` com caminho absoluto dá 404 e o render morre.
+
+    Devolve quantas imagens foram estagiadas com sucesso. Imagem ausente é
+    removida do plano — melhor sem overlay que com render quebrado.
+    """
+    overlays = plan.get("broll") or []
+    if not overlays:
+        return 0
+
+    public_dir = REMOTION_DIR / "public"
+    public_dir.mkdir(parents=True, exist_ok=True)
+
+    kept: list[dict[str, Any]] = []
+    for item in overlays:
+        src = Path(str(item.get("path", "")))
+        if not src.is_file():
+            continue
+
+        name = f"broll_{safe_slug(job_id)}_{safe_slug(cand_id)}_{safe_slug(src.stem)}{src.suffix}"
+        dest = public_dir / name
+        try:
+            if not (dest.exists() and dest.stat().st_size == src.stat().st_size):
+                if dest.exists():
+                    dest.unlink()
+                try:
+                    os.link(src, dest)
+                except OSError:
+                    shutil.copy2(src, dest)
+        except OSError:
+            continue
+
+        staged = dict(item)
+        # Caminho relativo à pasta public — é o que o bundle resolve.
+        staged["path"] = name
+        kept.append(staged)
+
+    plan["broll"] = kept
+    return len(kept)
+
+
 def stage_render(
     job_dir: Path,
     job_id: str,
@@ -784,6 +833,12 @@ def stage_render(
 
     staged_props = dict(plan)
     staged_props["source_video_path"] = staging["remotion_src"]
+
+    # Imagens de B-roll precisam do mesmo staging do vídeo (ver docstring).
+    broll_count = stage_broll_for_remotion(staged_props, job_id, cand_id)
+    if broll_count:
+        logger.info(f"{broll_count} imagem(ns) de B-roll estagiada(s)", stage="render")
+
     staged_props_path = out_dir / f"props_{cand_id}.json"
     write_json(staged_props_path, staged_props)
 

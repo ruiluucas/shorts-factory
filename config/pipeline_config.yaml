@@ -39,6 +39,44 @@ audio_policy:
   local_music_library: "assets/nocopyright_music/"
   ducking_db: -12.0
 
+# ---------------------------------------------------------------------------
+# Edição orgânica — o que separa "corte mecânico" de "edição humana"
+#
+# Desligado por padrão (`enabled: false`): com isso, o edit_plan gerado é
+# idêntico ao anterior. Ligue e compare com `make eval`.
+# ---------------------------------------------------------------------------
+organic_edit:
+  enabled: false
+
+  # Remove pausas longas mantendo respiro natural.
+  silence:
+    enabled: true
+    min_pause_ms: 700      # pausa menor que isso é respiração, não silêncio
+    keep_pause_ms: 150     # respiro que sobra nas bordas
+    max_removed_ratio: 0.35 # nunca remove >35% do trecho (descaracteriza)
+
+  # Punch-in suave nas palavras de ênfase.
+  rhythm:
+    enabled: true
+    min_gap_s: 2.0         # no máximo 1 zoom por 2s (mais que isso treme)
+    lead_s: 0.12           # zoom começa um pouco antes da palavra
+    hold_s: 0.55           # duração do zoom
+
+  # Imagens ilustrando o que está sendo falado.
+  # Prioridade: assets/broll/<assunto>/ (seu acervo) -> Openverse (CC comercial)
+  broll:
+    enabled: false         # requer rede OU pasta local preenchida
+    duration_s: 2.5        # aparece por 2.5s com fade in/out
+    min_interval_s: 5.0    # nunca duas imagens a menos de 5s
+    max_per_cut: 4         # teto por corte (evita poluição visual)
+    corner: "top"          # topo, longe da legenda
+    allow_network: false   # Openverse só se true; senão, só pasta local
+    local_dir: "assets/broll"
+    cache_dir: ".broll_cache"
+    timeout_s: 10.0
+    # Licenças aceitas quando vier da rede. NC (não comercial) fica de fora.
+    require_commercial_license: true
+
 crop_modes:
   default: "split_screen"
   fallback: "gameplay_centered"

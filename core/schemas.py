@@ -51,6 +51,45 @@ class ViralCandidate(BaseModel):
     confidence: float
 
 
+class BrollOverlay(BaseModel):
+    """Imagem sobreposta ilustrando o que está sendo falado.
+
+    `path` é absoluto ou relativo ao repo. `t_start`/`t_end` são relativos ao
+    início do corte. `license` é obrigatório: sem licença provada, a imagem
+    não deveria ter chegado até aqui (ver core/broll.py).
+    """
+
+    path: str
+    label: str
+    t_start: float = Field(ge=0)
+    t_end: float = Field(gt=0)
+    corner: str = "top"
+    source: str = "openverse"
+    license: str
+    attribution: str = ""
+    score: float = 0.0
+
+    @property
+    def duration(self) -> float:
+        return self.t_end - self.t_start
+
+
+class SilenceCut(BaseModel):
+    """Intervalo de silêncio removido, em tempo absoluto do vídeo fonte.
+
+    O render usa os `keep_ranges`; esta lista existe para auditoria e para o
+    QC comparar duração esperada com a obtida.
+    """
+
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    removed_s: float = Field(gt=0)
+
+    @property
+    def start_end_valid(self) -> bool:
+        return self.end > self.start
+
+
 class EditPlan(BaseModel):
     job_id: str
     composition_template: str  # ex: "ShortSplitScreen", "ShortCinematic"
@@ -61,6 +100,15 @@ class EditPlan(BaseModel):
     words: list[WordSegment]
     sfx_triggers: list[dict]
     background_music_track: str | None = None
+    # B-roll: imagens sobrepostas sobre a fala (vazio = comportamento antigo)
+    broll: list[BrollOverlay] = []
+    # Silêncios removidos na edição (vazio = audio intacto)
+    silence_cuts: list[SilenceCut] = []
+    # Faixas do vídeo fonte que sobrevivem ao corte, em tempo absoluto.
+    # Vazio = usa [candidate.start, candidate.end] sem edição.
+    keep_ranges: list[tuple[float, float]] = []
+    # Ritmo: janelas de punch-in por ênfase (relativo ao corte)
+    punch_ins: list[dict] = []
 
 
 class QCReport(BaseModel):

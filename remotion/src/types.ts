@@ -29,6 +29,28 @@ export type SfxTrigger = {
   volume?: number;
 };
 
+/** An image overlaid on top of the footage while the speech references it. */
+export type BrollOverlay = {
+  path: string;
+  label: string;
+  /** seconds relative to the start of the cut */
+  t_start: number;
+  t_end: number;
+  corner?: "top" | "top_left" | "top_right";
+  source?: string;
+  license?: string;
+  attribution?: string;
+  score?: number;
+};
+
+/** A punched-in emphasis window, seconds relative to the cut. */
+export type PunchIn = {
+  t: number;
+  duration?: number;
+  scale?: number;
+  word?: string;
+};
+
 /** The full edit plan as emitted by main.py / build_edit_plan(). */
 export type EditPlanProps = {
   job_id?: string;
@@ -40,6 +62,10 @@ export type EditPlanProps = {
   words?: WordSegment[];
   sfx_triggers?: SfxTrigger[];
   background_music_track?: string | null;
+  /** Imagens ilustrando a fala (vazio = comportamento antigo). */
+  broll?: BrollOverlay[];
+  /** Zoom suave nas palavras de ênfase. */
+  punch_ins?: PunchIn[];
   /** Texto do watermark no canto. Default: "SHORTS". */
   watermark?: string;
   /** extra passthrough fields are tolerated */
@@ -55,6 +81,8 @@ export type NormalizedPlan = {
   words: WordSegment[];
   sfx: { time: number; asset: string; volume: number; label?: string }[];
   music: string | null;
+  broll: BrollOverlay[];
+  punchIns: PunchIn[];
   titleText: string;
   /** Texto do watermark exibido na composição. */
   watermark: string;
@@ -127,6 +155,24 @@ export const normalizePlan = (plan: EditPlanProps): NormalizedPlan => {
     .filter((t) => Number.isFinite(t.time))
     .sort((a, b) => a.time - b.time);
 
+  const broll = (plan.broll ?? [])
+    .filter(
+      (b) =>
+        b &&
+        typeof b.path === "string" &&
+        b.path.length > 0 &&
+        typeof b.t_start === "number" &&
+        typeof b.t_end === "number" &&
+        b.t_end > b.t_start,
+    )
+    .slice()
+    .sort((a, b) => a.t_start - b.t_start);
+
+  const punchIns = (plan.punch_ins ?? [])
+    .filter((p) => p && typeof p.t === "number" && p.t >= 0)
+    .slice()
+    .sort((a, b) => a.t - b.t);
+
   return {
     jobId: plan.job_id ?? "job",
     candidateId: plan.candidate_id ?? "cand",
@@ -135,6 +181,8 @@ export const normalizePlan = (plan: EditPlanProps): NormalizedPlan => {
     words,
     sfx,
     music: plan.background_music_track ?? null,
+    broll,
+    punchIns,
     titleText: (plan.job_id ?? "SHORTS") as string,
     watermark: (plan.watermark as string) ?? "SHORTS",
   };

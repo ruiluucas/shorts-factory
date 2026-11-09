@@ -5,6 +5,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { BrollOverlays } from "../components/BrollOverlays";
 import { Captions } from "../components/Captions";
 import { SfxBadges } from "../components/SfxBadges";
 import { SourceVideo } from "../components/SourceVideo";
@@ -183,6 +184,7 @@ export const ShortSplitScreen: React.FC<ShortSplitScreenProps> = (props) => {
       </div>
 
       {/* --- captions + sfx --------------------------------------------- */}
+      <BrollOverlays overlays={plan.broll} />
       <Captions words={plan.words} bottom={FACECAM_HEIGHT - 40} />
       <SfxBadges plan={plan} top={GAMEPLAY_HEIGHT * 0.62} />
     </AbsoluteFill>
