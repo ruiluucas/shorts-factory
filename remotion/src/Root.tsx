@@ -2,6 +2,7 @@ import React from "react";
 import { Composition, CalculateMetadataFunction } from "remotion";
 import { ShortSplitScreen, ShortSplitScreenProps } from "./compositions/ShortSplitScreen";
 import { ShortCinematic, ShortCinematicProps } from "./compositions/ShortCinematic";
+import { StreamerSplit } from "./compositions/StreamerSplit";
 import { DEFAULT_DURATION_SECONDS, FPS, HEIGHT, WIDTH } from "./types";
 
 /**
@@ -72,6 +73,20 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="ShortCinematic"
         component={ShortCinematic as React.FC<Record<string, unknown>>}
+        durationInFrames={defaultInFrames}
+        fps={FPS}
+        width={WIDTH}
+        height={HEIGHT}
+        defaultProps={sampleProps as unknown as Record<string, unknown>}
+        calculateMetadata={
+          calculateMetadata as CalculateMetadataFunction<
+            Record<string, unknown>
+          >
+        }
+      />
+      <Composition
+        id="StreamerSplit"
+        component={StreamerSplit as React.FC<Record<string, unknown>>}
         durationInFrames={defaultInFrames}
         fps={FPS}
         width={WIDTH}

@@ -67,3 +67,7 @@ eval/reports/
 
 # B-roll baixado (cache) e acervo local do operador
 .broll_cache/
+
+# Agent Skills instaladas (npx skills add) — dependência, não código
+.claude/
+skills-lock.json

@@ -66,6 +66,13 @@ export type EditPlanProps = {
   broll?: BrollOverlay[];
   /** Zoom suave nas palavras de ênfase. */
   punch_ins?: PunchIn[];
+  /**
+   * Vídeo de gameplay exibido na banda inferior. Quando presente, a
+   * composição vira "StreamerSplit": narrador em cima, gameplay embaixo.
+   */
+  background_video_path?: string;
+  /** Fração da altura para a banda do narrador (0.2-0.7). */
+  narrator_split?: number;
   /** Texto do watermark no canto. Default: "SHORTS". */
   watermark?: string;
   /** extra passthrough fields are tolerated */
@@ -83,6 +90,10 @@ export type NormalizedPlan = {
   music: string | null;
   broll: BrollOverlay[];
   punchIns: PunchIn[];
+  /** Gameplay de fundo; null = composição de vídeo único. */
+  backgroundVideoPath: string | null;
+  /** Fração da altura do narrador na composição split. */
+  narratorSplit: number;
   titleText: string;
   /** Texto do watermark exibido na composição. */
   watermark: string;
@@ -110,6 +121,15 @@ export const toVideoSrc = (p: string): string => {
     return p.replace(/^file:\/\//i, "");
   }
   return p;
+};
+
+/** Fração da altura do narrador: 45% é o padrão do formato streamer. */
+export const DEFAULT_NARRATOR_SPLIT = 0.45;
+
+export const clampSplit = (raw: unknown): number => {
+  const value = typeof raw === "number" && Number.isFinite(raw) ? raw : DEFAULT_NARRATOR_SPLIT;
+  // Abaixo de 0.25 o rosto some; acima de 0.7 sobra pouca gameplay.
+  return Math.min(0.7, Math.max(0.25, value));
 };
 
 export const normalizeVolume = (trigger: SfxTrigger): number => {
@@ -183,6 +203,10 @@ export const normalizePlan = (plan: EditPlanProps): NormalizedPlan => {
     music: plan.background_music_track ?? null,
     broll,
     punchIns,
+    backgroundVideoPath: plan.background_video_path
+      ? toVideoSrc(String(plan.background_video_path))
+      : null,
+    narratorSplit: clampSplit(plan.narrator_split),
     titleText: (plan.job_id ?? "SHORTS") as string,
     watermark: (plan.watermark as string) ?? "SHORTS",
   };

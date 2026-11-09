@@ -83,6 +83,26 @@ crop_modes:
   facecam_threshold: 0.70
 
 # ---------------------------------------------------------------------------
+# Formato streamer: narrador em cima, gameplay embaixo.
+#
+# É o formato "gameplay commentary": as duas bandas vêm do MESMO vídeo de
+# origem (facecam no terço superior, ação no centro). O áudio toca só na banda
+# de cima — duas trilhas simultâneas seria eco.
+#
+# Desligado por padrão para não alterar a saída de quem já usa o pipeline.
+# ---------------------------------------------------------------------------
+streamer_split:
+  enabled: false
+  # Fração da altura ocupada pelo narrador. 0.45 = 45% em cima / 55% embaixo.
+  narrator_split: 0.45
+  # Enquadramento do narrador: "center 12%" pega a facecam de uma live típica.
+  narrator_focus: "center 12%"
+  # Enquadramento da gameplay: centro do frame.
+  gameplay_focus: "center 62%"
+  # Vermelho do selo inferior (usado pela UI do Remotion se quiser destacar).
+  accent: "#E8262C"
+
+# ---------------------------------------------------------------------------
 # Camada de decisão (Jev / heurística)
 #
 # Regras (ver docs/JEV_NOTES.md e docs/DECISIONS.md):

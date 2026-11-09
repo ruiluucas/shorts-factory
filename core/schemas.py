@@ -109,6 +109,8 @@ class EditPlan(BaseModel):
     keep_ranges: list[tuple[float, float]] = []
     # Ritmo: janelas de punch-in por ênfase (relativo ao corte)
     punch_ins: list[dict] = []
+    # Formato streamer: fração da altura para a banda do narrador (0.25-0.7).
+    narrator_split: float = 0.45
 
 
 class QCReport(BaseModel):

@@ -260,3 +260,51 @@ componente aplica `resolveSrc()`, o mesmo resolvedor do vídeo, que prefixa
 
 **Medido.** Depois disso: `[COMPLETED]`, 2 renders, QC OK, e o frame em 4.5s mostra
 o box "CARRO" no topo enquanto o frame em 10s mostra só a legenda.
+
+---
+
+## D-017 — Formato streamer: uma composição nova, não um crop do existente
+
+**Contexto.** O formato alvo ("gameplay commentary") tem narrador em cima e
+gameplay embaixo. Não é o mesmo que `ShortSplitScreen`, que recorta uma facecam
+pequena do próprio vídeo.
+
+**Decisão.** Composição `StreamerSplit`, 45% narrador / 55% gameplay, com as duas
+bandas vindas do **mesmo vídeo de origem** em recortes distintos:
+  - banda de cima: `objectPosition: center 12%` (facecam, terço superior);
+  - banda de baixo: `objectPosition: center 62%` (ação, centro).
+
+**Por que recorte e não dois arquivos.** Numa live de streamer, facecam e gameplay
+já estão no mesmo frame — o pipeline não precisa de duas mídias. O campo
+`background_video_path` existe para quando forem fontes separadas, mas o caso
+padrão é um arquivo só.
+
+**Áudio só na banda de cima.** A de baixo usa `muted`. Duas trilhas do mesmo áudio
+tocando juntas produz um eco de ~0ms que soa como compressão ruim.
+
+**Medido.** Fixture sintética com facecam laranja em cima e bloco azul embaixo:
+render `[COMPLETED]`, 1080x1920, 21.7s, e o frame em 6s mostra as duas bandas, a
+linha branca divisória e a legenda "QUE ELE FEZ ISSO".
+
+**Desligado por padrão** (`streamer_split.enabled: false`): quem já usa o pipeline
+não tem a saída alterada.
+
+---
+
+## D-018 — Agent Skills ficam fora do repo e fora do lint
+
+**Contexto.** `npx skills add remotion-dev/skills` instalou 3 skills em
+`.claude/skills/`. O `ruff format --check` passou a varrer 162 arquivos.
+
+**Decisão.** `.claude/` e `skills-lock.json` no `.gitignore`, e `.claude` no
+`exclude` do ruff.
+
+**Motivo.** São dependências de terceiros, como `node_modules`. Versioná-las
+significa revisar código alheio em cada PR e reclamar de estilo que não é nosso.
+`npx skills add` reinstala em segundos.
+
+**Skills usadas:** `remotion-captions` (tipo `Caption` oficial — `startMs`/`endMs`,
+nosso `WordSegment` é compatível com conversão), `remotion-markup`,
+`remotion-best-practices`. As `social-media-skills` foram **rejeitadas**: a
+`captions-and-clipping` é sobre Opus Clip / CapCut / Submagic — ferramentas SaaS,
+não render em código.

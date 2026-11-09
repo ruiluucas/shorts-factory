@@ -960,7 +960,15 @@ def build_edit_plan(
         recommended = vision.get("recommended_crop_mode") or vision.get("crop_mode")
     crop_mode = str(recommended or crop_modes.get("fallback") or crop_modes.get("default") or "gameplay_centered")
 
+    # Formato streamer: narrador em cima, gameplay embaixo, ambos do mesmo vídeo.
+    # Tem precedência sobre o crop_mode quando ligado no config.
+    streamer = _get_section(cfg, "streamer_split")
+    use_streamer = bool(streamer.get("enabled", False))
+
     template = "ShortSplitScreen" if crop_mode == "split_screen" else "ShortCinematic"
+    if use_streamer:
+        template = "StreamerSplit"
+        crop_mode = "streamer_split"
 
     # SFX: peaks dentro da janela, em tempo relativo.
     sfx_triggers: list[dict[str, Any]] = []
@@ -989,6 +997,7 @@ def build_edit_plan(
         words=words_in,
         sfx_triggers=sfx_triggers,
         background_music_track=None,
+        narrator_split=(float(_clamp(streamer.get("narrator_split", 0.45), 0.25, 0.7)) if use_streamer else 0.45),
     )
 
     # --- edição orgânica: silêncio, ritmo e B-roll -------------------------
